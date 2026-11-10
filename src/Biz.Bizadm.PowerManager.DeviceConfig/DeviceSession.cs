@@ -1,5 +1,6 @@
 using Biz.Bizadm.PowerManager.DeviceConfig.Messages;
 using Biz.Bizadm.PowerManager.DeviceConfig.Transport;
+using Biz.Bizadm.PowerManager.DeviceConfig.Wifi;
 using Microsoft.Extensions.Logging;
 using System.Text.RegularExpressions;
 
@@ -32,11 +33,11 @@ namespace Biz.Bizadm.PowerManager.DeviceConfig
         }
 
         /// <summary>
-        /// ConnectAp 외의 명령을 실행한다. ConnectAp는 ConnectApAsync를 쓴다.
+        /// ConnectAp 외의 명령을 실행한다. ConnectAp는 <see cref="ConnectApAsync"/>를 쓴다.
         /// </summary>
         public Task<DeviceResponse> ExecuteAsync(DeviceCommand command, CancellationToken cancellationToken) => command switch
         {
-            DeviceCommand.ApScan => SendJsonCommandAsync("apscan", timeouts.ApScan, allowDisconnect: false, cancellationToken),
+            DeviceCommand.ApScan => ApScanAsync(cancellationToken),
             DeviceCommand.Reboot => SendJsonCommandAsync("reboot", timeouts.Response, allowDisconnect: true, cancellationToken),
             DeviceCommand.FactoryReset => SendJsonCommandAsync("factoryreset", timeouts.Response, allowDisconnect: true, cancellationToken),
             DeviceCommand.ScanAp => SendTestCommandAsync("SCAN_AP", allowDisconnect: false, cancellationToken),
@@ -45,9 +46,26 @@ namespace Biz.Bizadm.PowerManager.DeviceConfig
             DeviceCommand.Measurement => SendTestCommandAsync("MEASUREMENT", allowDisconnect: false, cancellationToken),
             DeviceCommand.OverLoad => SendTestCommandAsync("OVERLOAD", allowDisconnect: false, cancellationToken),
             DeviceCommand.TestFactoryReset => SendTestCommandAsync("FACTORY_RESET", allowDisconnect: true, cancellationToken),
-            DeviceCommand.ConnectAp => throw new InvalidOperationException("Use ConnectApAsync for ConnectAp"),
+            DeviceCommand.ConnectAp => throw new InvalidOperationException($"Use {nameof(ConnectApAsync)} for {nameof(DeviceCommand.ConnectAp)}"),
             _ => throw new ArgumentOutOfRangeException(nameof(command), command, null),
         };
+
+        /// <summary>
+        /// apscan 결과의 SSID·RSSI를 로그로 남긴다. 형식이 달라도 원문은 돌려준다(실장비 형식 미확인).
+        /// </summary>
+        private async Task<DeviceResponse> ApScanAsync(CancellationToken cancellationToken)
+        {
+            DeviceResponse response = await SendJsonCommandAsync("apscan", timeouts.ApScan, allowDisconnect: false, cancellationToken);
+            try
+            {
+                LogScanned(ApScanParser.Parse(response.Raw));
+            }
+            catch (DeviceProtocolException ex)
+            {
+                logger.LogWarning("{Message}", ex.Message);
+            }
+            return response;
+        }
 
         private Task<DeviceResponse> SendJsonCommandAsync(string command, TimeSpan timeout, bool allowDisconnect, CancellationToken cancellationToken) =>
             SendAndReceiveAsync(DeviceMessageSerializer.Serialize(new DeviceCommandMessage(command)), DeviceFrame.Json, timeout, allowDisconnect, cancellationToken);
