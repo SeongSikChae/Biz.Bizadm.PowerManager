@@ -1,4 +1,5 @@
 using Biz.Bizadm.PowerManager.DeviceConfig.App.Security;
+using Biz.Bizadm.PowerManager.DeviceConfig.Wifi;
 using CommandLine;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -60,7 +61,7 @@ namespace Biz.Bizadm.PowerManager.DeviceConfig.App
             IHost host;
             try
             {
-                host = CreateHostApplication(args, cmdMain, appConfiguration);
+                host = CreateHostApplication(args, cmdMain, appConfiguration, secrets);
             }
             catch (Exception ex)
             {
@@ -104,7 +105,7 @@ namespace Biz.Bizadm.PowerManager.DeviceConfig.App
             return secrets;
         }
 
-        private static IHost CreateHostApplication(string[] args, CmdMain cmdMain, AppConfiguration appConfiguration)
+        private static IHost CreateHostApplication(string[] args, CmdMain cmdMain, AppConfiguration appConfiguration, DecryptedSecrets secrets)
         {
             HostApplicationBuilder builder = Host.CreateApplicationBuilder(new HostApplicationBuilderSettings
             {
@@ -130,6 +131,12 @@ namespace Biz.Bizadm.PowerManager.DeviceConfig.App
                         retainedFileCountLimit: 12
                     );
             });
+
+            builder.Services.AddSingleton(appConfiguration);
+            builder.Services.AddSingleton(secrets);
+            builder.Services.AddSingleton<IWifiProfileSelector, ConsoleWifiProfileSelector>();
+            builder.Services.AddSingleton<IDeviceApSelector, ConsoleDeviceApSelector>();
+            builder.Services.AddHostedService<DeviceConfigService>();
 
             return builder.Build();
         }
