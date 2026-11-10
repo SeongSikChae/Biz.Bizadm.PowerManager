@@ -111,12 +111,18 @@ namespace Biz.Bizadm.PowerManager.DeviceConfig
             }
         }
 
+        /// <summary>
+        /// PC의 현재 연결 SSID가 대상과 같아지고 IPv4를 받으면 게이트웨이를 장치 주소로 쓴다.
+        /// SSID를 먼저 확인하지 않으면 직전 연결의 남은 IP·게이트웨이를 접속 완료로 오판한다(실장비 확인).
+        /// </summary>
         private async Task<DeviceEndpoint> ResolveAsync(HostWifiConnection connection, CancellationToken cancellationToken)
         {
             DateTime deadline = DateTime.UtcNow + options.ConnectTimeout;
+            HostWifiConnection? current = null;
             while (true)
             {
-                InterfaceAddressState? state = inspector.Inspect(connection.InterfaceId);
+                current = await TryGetCurrentAsync(cancellationToken);
+                InterfaceAddressState? state = current?.Ssid == connection.Ssid ? inspector.Inspect(connection.InterfaceId) : null;
                 if (state is { HasIPv4: true })
                 {
                     if (state.Gateway is null)
@@ -128,8 +134,23 @@ namespace Biz.Bizadm.PowerManager.DeviceConfig
                     return new DeviceEndpoint(state.Gateway, connection.Ssid);
                 }
                 if (DateTime.UtcNow >= deadline)
-                    throw new TimeoutException($"No IPv4 address on {connection.InterfaceId} after connecting to {connection.Ssid}");
+                    throw new TimeoutException(current?.Ssid == connection.Ssid
+                        ? $"No IPv4 address on {connection.InterfaceId} after connecting to {connection.Ssid}"
+                        : $"PC Wi-Fi did not connect to {connection.Ssid} (current: {current?.Ssid ?? "none"})");
                 await Task.Delay(pollInterval, cancellationToken);
+            }
+        }
+
+        private async Task<HostWifiConnection?> TryGetCurrentAsync(CancellationToken cancellationToken)
+        {
+            try
+            {
+                return await hostWifi!.GetCurrentAsync(cancellationToken);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                logger.LogDebug(ex, "Failed to read the current Wi-Fi connection while waiting");
+                return null;
             }
         }
 

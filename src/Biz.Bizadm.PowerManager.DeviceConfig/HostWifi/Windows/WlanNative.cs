@@ -30,6 +30,8 @@ namespace Biz.Bizadm.PowerManager.DeviceConfig.HostWifi.Windows
         public const int AvailableNetworkSignalOffset = 604;     // wlanSignalQuality (0~100)
         public const int AvailableNetworkFlagsOffset = 620;      // dwFlags
         // WLAN_CONNECTION_ATTRIBUTES: isState(4) + mode(4) + strProfileName WCHAR[256] + WLAN_ASSOCIATION_ATTRIBUTES(DOT11_SSID ...)
+        public const int ConnectionStateOffset = 0;
+        public const int InterfaceStateConnected = 1;       // wlan_interface_state_connected
         public const int ConnectionProfileNameOffset = 8;
         public const int ConnectionSsidOffset = 520;
 
@@ -153,7 +155,7 @@ namespace Biz.Bizadm.PowerManager.DeviceConfig.HostWifi.Windows
         }
 
         /// <summary>
-        /// 현재 연결의 (프로필 이름, SSID). 연결되어 있지 않으면 null.
+        /// 현재 연결의 (프로필 이름, SSID). 연결 완료(connected) 상태가 아니면 null(연결 시도 중에도 SSID가 보일 수 있다).
         /// </summary>
         public (string ProfileName, string Ssid)? GetCurrentConnection(Guid interfaceGuid)
         {
@@ -163,6 +165,8 @@ namespace Biz.Bizadm.PowerManager.DeviceConfig.HostWifi.Windows
             WlanNative.ThrowIfFailed(result, "WlanQueryInterface(current_connection)");
             try
             {
+                if (Marshal.ReadInt32(data + WlanNative.ConnectionStateOffset) != WlanNative.InterfaceStateConnected)
+                    return null;
                 string profile = Marshal.PtrToStringUni(data + WlanNative.ConnectionProfileNameOffset) ?? string.Empty;
                 return (profile, WlanNative.ReadSsid(data + WlanNative.ConnectionSsidOffset));
             }

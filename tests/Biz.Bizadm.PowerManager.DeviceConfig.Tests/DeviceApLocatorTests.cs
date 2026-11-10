@@ -10,10 +10,16 @@ namespace Biz.Bizadm.PowerManager.DeviceConfig.Tests
 
         private sealed class FakeHostWifi : IHostWifi
         {
+            private HostWifiConnection? connected;
+            private int callsAfterConnect;
+
             public IReadOnlyList<HostWifiNetwork> Networks { get; init; } = [];
             public Exception? ScanError { get; init; }
-            public HostWifiConnection? Current { get; init; }
+            public HostWifiConnection? Current { get; set; }
             public Exception? RestoreError { get; init; }
+            /// <summary>접속 요청 후 현재 연결이 바뀌기 전까지 이전 연결을 돌려주는 GetCurrent 호출 수.</summary>
+            public int AssociateAfterCalls { get; init; }
+            public bool NeverAssociate { get; init; }
             public List<string> Calls { get; } = [];
 
             public Task<IReadOnlyList<HostWifiNetwork>> ScanAsync(CancellationToken cancellationToken)
@@ -22,12 +28,18 @@ namespace Biz.Bizadm.PowerManager.DeviceConfig.Tests
                 return ScanError is null ? Task.FromResult(Networks) : Task.FromException<IReadOnlyList<HostWifiNetwork>>(ScanError);
             }
 
-            public Task<HostWifiConnection?> GetCurrentAsync(CancellationToken cancellationToken) => Task.FromResult(Current);
+            public Task<HostWifiConnection?> GetCurrentAsync(CancellationToken cancellationToken)
+            {
+                if (connected is not null && !NeverAssociate && callsAfterConnect++ >= AssociateAfterCalls)
+                    Current = connected;
+                return Task.FromResult(Current);
+            }
 
             public Task<HostWifiConnection> ConnectOpenAsync(string ssid, CancellationToken cancellationToken)
             {
                 Calls.Add($"connect {ssid}");
-                return Task.FromResult(new HostWifiConnection("wlan-if", ssid, "temp"));
+                connected = new HostWifiConnection("wlan-if", ssid, "temp");
+                return Task.FromResult(connected);
             }
 
             public Task RestoreAsync(HostWifiConnection previous, CancellationToken cancellationToken)
@@ -46,6 +58,16 @@ namespace Biz.Bizadm.PowerManager.DeviceConfig.Tests
         private sealed class FakeInspector(InterfaceAddressState? state) : INetworkInterfaceInspector
         {
             public InterfaceAddressState? Inspect(string interfaceId) => state;
+        }
+
+        /// <summary>
+        /// 현재 연결에 따라 주소 상태가 달라지는 인터페이스(직전 연결의 IP가 남은 상황 재현).
+        /// </summary>
+        private sealed class ConnectionAwareInspector(FakeHostWifi wifi, string deviceSsid) : INetworkInterfaceInspector
+        {
+            public InterfaceAddressState? Inspect(string interfaceId) => wifi.Current?.Ssid == deviceSsid
+                ? new InterfaceAddressState(true, "192.168.244.1")
+                : new InterfaceAddressState(true, "192.168.0.1");
         }
 
         private sealed class FirstSelector : IDeviceApSelector
@@ -145,6 +167,38 @@ namespace Biz.Bizadm.PowerManager.DeviceConfig.Tests
             await locator.DisposeAsync();
 
             CollectionAssert.AreEqual(new[] { "scan", "connect DWD-x", "remove temp", "restore HomeAP" }, wifi.Calls);
+        }
+
+        [TestMethod]
+        public async Task StaleAddressBeforeAssociation_WaitsForDeviceSsid()
+        {
+            FakeHostWifi wifi = new()
+            {
+                Networks = [new("DWD-x", 70)],
+                Current = new HostWifiConnection("wlan-if", "HomeAP", "HomeAP"),
+                AssociateAfterCalls = 3,
+            };
+            await using DeviceApLocator locator = new(wifi, new FirstSelector(), Options, NullLogger.Instance,
+                new ConnectionAwareInspector(wifi, "DWD-x"), TimeSpan.FromMilliseconds(20));
+
+            Assert.AreEqual(new DeviceEndpoint("192.168.244.1", "DWD-x"), await locator.LocateAsync(CancellationToken.None));
+        }
+
+        [TestMethod]
+        public async Task NeverAssociates_TimesOutEvenWithIPv4()
+        {
+            FakeHostWifi wifi = new()
+            {
+                Networks = [new("DWD-x", 70)],
+                Current = new HostWifiConnection("wlan-if", "HomeAP", "HomeAP"),
+                NeverAssociate = true,
+            };
+            DeviceApLocator locator = Locator(wifi, new InterfaceAddressState(true, "192.168.0.1"));
+
+            TimeoutException ex = await Assert.ThrowsExactlyAsync<TimeoutException>(() => locator.LocateAsync(CancellationToken.None));
+            Assert.Contains("did not connect to DWD-x", ex.Message);
+            await locator.DisposeAsync();
+            CollectionAssert.Contains(wifi.Calls, "restore HomeAP");
         }
 
         [TestMethod]
