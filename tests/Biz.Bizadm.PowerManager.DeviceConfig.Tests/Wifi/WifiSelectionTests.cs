@@ -15,6 +15,24 @@ namespace Biz.Bizadm.PowerManager.DeviceConfig.Tests.Wifi
                 result.ToArray());
         }
 
+        /// <summary>
+        /// 실장비 응답 형태(공백·대괄호·'+' 포함 SSID). SSID는 가상 값.
+        /// </summary>
+        [TestMethod]
+        public void Parse_RealDeviceShape()
+        {
+            IReadOnlyList<ScannedAp> result = ApScanParser.Parse(
+                "{\"SCAN_AP_LIST\":{\"Net-A_IOT:-57\",\"[Brand Device]d19f:-73\",\"U+Net1234:-78\",\"DIRECT-xx Series:-84\"}}");
+
+            CollectionAssert.AreEqual(
+                new[]
+                {
+                    new ScannedAp("Net-A_IOT", -57), new ScannedAp("[Brand Device]d19f", -73),
+                    new ScannedAp("U+Net1234", -78), new ScannedAp("DIRECT-xx Series", -84),
+                },
+                result.ToArray());
+        }
+
         [TestMethod]
         public void Parse_EmptyList()
         {

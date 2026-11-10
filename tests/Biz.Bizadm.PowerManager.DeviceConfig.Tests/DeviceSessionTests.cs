@@ -46,7 +46,8 @@ namespace Biz.Bizadm.PowerManager.DeviceConfig.Tests
         }
 
         [TestMethod]
-        [DataRow(DeviceCommand.ScanAp, "[DUT<-PC] SCAN_AP", "[DUT->PC] SCAN_AP_LIST:a:-40#")]
+        // 실장비 확인: 공장검사 SCAN_AP 응답은 '#' 없는 JSON
+        [DataRow(DeviceCommand.ScanAp, "[DUT<-PC] SCAN_AP", "{\"SCAN_AP_LIST\":{\"Home AP:-57\",\"[Ap] x+1:-73\"}}")]
         [DataRow(DeviceCommand.OnCmd, "[DUT<-PC] ON_CMD", "[DUT->PC] ON_CMD_OK#")]
         [DataRow(DeviceCommand.OffCmd, "[DUT<-PC] OFF_CMD", "[DUT->PC] OFF_CMD_OK#")]
         [DataRow(DeviceCommand.Measurement, "[DUT<-PC] MEASUREMENT", "[DUT->PC] MEASUREMENT_W:1.5#")]

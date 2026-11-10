@@ -37,10 +37,11 @@ namespace Biz.Bizadm.PowerManager.DeviceConfig
         /// </summary>
         public Task<DeviceResponse> ExecuteAsync(DeviceCommand command, CancellationToken cancellationToken) => command switch
         {
-            DeviceCommand.ApScan => ApScanAsync(cancellationToken),
+            DeviceCommand.ApScan => ScanApsAsync(DeviceMessageSerializer.Serialize(new DeviceCommandMessage("apscan")), cancellationToken),
             DeviceCommand.Reboot => SendJsonCommandAsync("reboot", timeouts.Response, allowDisconnect: true, cancellationToken),
             DeviceCommand.FactoryReset => SendJsonCommandAsync("factoryreset", timeouts.Response, allowDisconnect: true, cancellationToken),
-            DeviceCommand.ScanAp => SendTestCommandAsync("SCAN_AP", allowDisconnect: false, cancellationToken),
+            // 실장비 확인: 공장검사 SCAN_AP도 '#' 프레임이 아니라 apscan과 같은 JSON으로 응답한다
+            DeviceCommand.ScanAp => ScanApsAsync("[DUT<-PC] SCAN_AP", cancellationToken),
             DeviceCommand.OnCmd => SendTestCommandAsync("ON_CMD", allowDisconnect: false, cancellationToken),
             DeviceCommand.OffCmd => SendTestCommandAsync("OFF_CMD", allowDisconnect: false, cancellationToken),
             DeviceCommand.Measurement => SendTestCommandAsync("MEASUREMENT", allowDisconnect: false, cancellationToken),
@@ -51,11 +52,11 @@ namespace Biz.Bizadm.PowerManager.DeviceConfig
         };
 
         /// <summary>
-        /// apscan 결과의 SSID·RSSI를 로그로 남긴다. 형식이 달라도 원문은 돌려준다(실장비 형식 미확인).
+        /// apscan·공장검사 SCAN_AP: JSON <c>{"SCAN_AP_LIST":{...}}</c> 응답의 SSID·RSSI를 로그로 남긴다. 형식이 달라도 원문은 돌려준다.
         /// </summary>
-        private async Task<DeviceResponse> ApScanAsync(CancellationToken cancellationToken)
+        private async Task<DeviceResponse> ScanApsAsync(string line, CancellationToken cancellationToken)
         {
-            DeviceResponse response = await SendJsonCommandAsync("apscan", timeouts.ApScan, allowDisconnect: false, cancellationToken);
+            DeviceResponse response = await SendAndReceiveAsync(line, DeviceFrame.Json, timeouts.ApScan, allowDisconnect: false, cancellationToken);
             try
             {
                 LogScanned(ApScanParser.Parse(response.Raw));
