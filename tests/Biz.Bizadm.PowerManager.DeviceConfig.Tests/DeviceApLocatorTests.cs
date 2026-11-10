@@ -6,7 +6,7 @@ namespace Biz.Bizadm.PowerManager.DeviceConfig.Tests
     [TestClass]
     public sealed class DeviceApLocatorTests
     {
-        private static readonly DeviceApOptions Options = new("DWD-", "192.168.4.1", TimeSpan.FromMilliseconds(300));
+        private static readonly DeviceApOptions Options = new("DWD-", "192.168.244.1", TimeSpan.FromMilliseconds(300));
 
         private sealed class FakeHostWifi : IHostWifi
         {
@@ -61,13 +61,13 @@ namespace Biz.Bizadm.PowerManager.DeviceConfig.Tests
 
         private static DeviceApLocator Locator(IHostWifi? wifi, InterfaceAddressState? state = null, FirstSelector? selector = null) =>
             new(wifi, selector ?? new FirstSelector(), Options, NullLogger.Instance,
-                new FakeInspector(state ?? new InterfaceAddressState(true, "192.168.4.1")), TimeSpan.FromMilliseconds(20));
+                new FakeInspector(state ?? new InterfaceAddressState(true, "192.168.244.1")), TimeSpan.FromMilliseconds(20));
 
         [TestMethod]
         public async Task NotSupported_UsesFallback()
         {
             await using DeviceApLocator locator = Locator(null);
-            Assert.AreEqual(new DeviceEndpoint("192.168.4.1", null), await locator.LocateAsync(CancellationToken.None));
+            Assert.AreEqual(new DeviceEndpoint("192.168.244.1", null), await locator.LocateAsync(CancellationToken.None));
         }
 
         [TestMethod]
@@ -76,7 +76,7 @@ namespace Biz.Bizadm.PowerManager.DeviceConfig.Tests
             FakeHostWifi wifi = new() { ScanError = new HostWifiException("access denied") };
             await using DeviceApLocator locator = Locator(wifi);
 
-            Assert.AreEqual(new DeviceEndpoint("192.168.4.1", null), await locator.LocateAsync(CancellationToken.None));
+            Assert.AreEqual(new DeviceEndpoint("192.168.244.1", null), await locator.LocateAsync(CancellationToken.None));
         }
 
         [TestMethod]
@@ -97,8 +97,8 @@ namespace Biz.Bizadm.PowerManager.DeviceConfig.Tests
                 Networks = [new("DWD-LS120_a1b2c3", 80)],
                 Current = new HostWifiConnection("wlan-if", "DWD-LS120_a1b2c3", "DWD-LS120_a1b2c3"),
             };
-            await using (DeviceApLocator locator = Locator(wifi, new InterfaceAddressState(true, "192.168.4.1")))
-                Assert.AreEqual(new DeviceEndpoint("192.168.4.1", "DWD-LS120_a1b2c3"), await locator.LocateAsync(CancellationToken.None));
+            await using (DeviceApLocator locator = Locator(wifi, new InterfaceAddressState(true, "192.168.244.1")))
+                Assert.AreEqual(new DeviceEndpoint("192.168.244.1", "DWD-LS120_a1b2c3"), await locator.LocateAsync(CancellationToken.None));
 
             CollectionAssert.AreEqual(new[] { "scan" }, wifi.Calls);
         }
@@ -128,7 +128,7 @@ namespace Biz.Bizadm.PowerManager.DeviceConfig.Tests
             FakeHostWifi wifi = new() { Networks = [new("DWD-x", 70)] };
             await using DeviceApLocator locator = Locator(wifi, new InterfaceAddressState(true, null));
 
-            Assert.AreEqual(new DeviceEndpoint("192.168.4.1", "DWD-x"), await locator.LocateAsync(CancellationToken.None));
+            Assert.AreEqual(new DeviceEndpoint("192.168.244.1", "DWD-x"), await locator.LocateAsync(CancellationToken.None));
         }
 
         [TestMethod]

@@ -56,7 +56,7 @@ OsKms:
 Device:
   ApSsidPrefix: DWD-    # PC Wi‑Fi 스캔에서 장치 AP로 볼 SSID 접두사
   ApConnectTimeoutSeconds: 30
-  Host: 192.168.4.1     # 장치 AP를 찾지 못했거나 게이트웨이를 못 얻을 때 사용
+  Host: 192.168.244.1     # 장치 AP를 찾지 못했거나 게이트웨이를 못 얻을 때 사용
   Port: 5000
   TimeoutSeconds: 5
   ApScanTimeoutSeconds: 15  # 장치 apscan 응답 대기(스캔이 일반 응답보다 오래 걸릴 수 있음)

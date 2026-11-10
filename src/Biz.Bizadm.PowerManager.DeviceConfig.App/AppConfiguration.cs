@@ -87,7 +87,7 @@ namespace Biz.Bizadm.PowerManager.DeviceConfig.App
         public int ApConnectTimeoutSeconds { get; set; } = 30;
 
         [Property(PropertyType.STRING, required: false)]
-        public string Host { get; set; } = "192.168.4.1";
+        public string Host { get; set; } = "192.168.244.1";
 
         [Property(PropertyType.INT, required: false)]
         public int Port { get; set; } = 5000;

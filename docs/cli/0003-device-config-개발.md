@@ -408,7 +408,7 @@ internal sealed class DeviceSection
 {
     [Property(PropertyType.STRING, required: false, DefaultValue = "DWD-")] public string ApSsidPrefix { get; set; } = "DWD-";
     [Property(PropertyType.INT, required: false, DefaultValue = 30)] public int ApConnectTimeoutSeconds { get; set; } = 30;
-    [Property(PropertyType.STRING, required: false, DefaultValue = "192.168.4.1")] public string Host { get; set; } = "192.168.4.1";
+    [Property(PropertyType.STRING, required: false, DefaultValue = "192.168.244.1")] public string Host { get; set; } = "192.168.244.1";
     [Property(PropertyType.INT, required: false, DefaultValue = 5000)] public int Port { get; set; } = 5000;
     [Property(PropertyType.INT, required: false, DefaultValue = 5)] public int TimeoutSeconds { get; set; } = 5;
     [Property(PropertyType.INT, required: false, DefaultValue = 15)] public int ApScanTimeoutSeconds { get; set; } = 15;
@@ -585,7 +585,7 @@ public sealed class RealDeviceTests
 
 ```powershell
 # 수동 실행 (PC가 장치 AP에 접속 가능한 상태)
-$env:B540_DEVICE_HOST = '192.168.4.1'
+$env:B540_DEVICE_HOST = '192.168.244.1'
 dotnet test tests/Biz.Bizadm.PowerManager.DeviceConfig.Tests --filter "TestCategory=Device"
 ```
 
