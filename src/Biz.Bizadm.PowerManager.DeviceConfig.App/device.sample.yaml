@@ -7,7 +7,7 @@
 # - OsKms.Salt는 비워 두면 첫 실행 때 생성·기록된다. DEK 파일이 있는데 Salt만 비우면 설정 오류로 끝난다.
 ContentRootPath: .
 OsKms:
-  CredentialService: Biz.Bizadm.PowerManager.DeviceConfig
+  CredentialService: https://deviceconfig.powermanager.local   # OS 자격 증명 금고 서비스(절대 URI)
   CredentialAccount: kek
   Salt:
   Iterations: 600000

@@ -27,6 +27,8 @@ namespace Biz.Bizadm.PowerManager.DeviceConfig.App
             if (OsKms is null)
                 throw new ArgumentException("OsKms is required");
             ConfigurationValidator.Validate(OsKms);
+            if (!Uri.TryCreate(OsKms.CredentialService, UriKind.Absolute, out _))
+                throw new ArgumentException($"OsKms.CredentialService must be an absolute URI (e.g. https://deviceconfig.powermanager.local): {OsKms.CredentialService}");
             Device ??= new DeviceSection();
             ConfigurationValidator.Validate(Device);
             Device.Validate();
@@ -58,6 +60,7 @@ namespace Biz.Bizadm.PowerManager.DeviceConfig.App
 
     internal sealed class OsKmsSection
     {
+        /// <summary>OS 자격 증명 금고(GCM) 서비스. 절대 URI여야 한다.</summary>
         [Property(PropertyType.STRING, required: true)]
         public string CredentialService { get; set; } = null!;
 

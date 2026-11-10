@@ -1,3 +1,4 @@
+using Biz.Bizadm.PowerManager.DeviceConfig.App.Security;
 using CommandLine;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -45,6 +46,17 @@ namespace Biz.Bizadm.PowerManager.DeviceConfig.App
                 return ExitCode.ConfigurationError;
             }
 
+            DecryptedSecrets secrets;
+            try
+            {
+                secrets = ProtectSecrets(cmdMain.ConfigFilePath, appConfiguration);
+            }
+            catch (Exception ex)
+            {
+                Console.Error.WriteLine($"Configuration error: {ex.Message}");
+                return ExitCode.ConfigurationError;
+            }
+
             IHost host;
             try
             {
@@ -71,6 +83,25 @@ namespace Biz.Bizadm.PowerManager.DeviceConfig.App
                     return ExitCode.RuntimeError;
                 }
             }
+        }
+
+        /// <summary>
+        /// 보안값을 KMS로 암호화하고 필요하면 설정 파일을 다시 쓴 뒤 복호화 값을 돌려준다. 보호할 값이 없으면 KMS를 건너뛴다.
+        /// </summary>
+        private static DecryptedSecrets ProtectSecrets(string configFilePath, AppConfiguration appConfiguration)
+        {
+            if (!ConfigSecretProtector.HasSecrets(appConfiguration))
+                return DecryptedSecrets.Empty;
+
+            using ConfigSecretProtector protector = ConfigSecretProtector.Create(appConfiguration);
+            DecryptedSecrets secrets = protector.Protect(appConfiguration, Console.WriteLine);
+            if (protector.Rewrite)
+            {
+                YamlDotNet.Serialization.Serializer serializer = new YamlDotNet.Serialization.Serializer();
+                File.WriteAllText(configFilePath, serializer.Serialize(appConfiguration));
+                Console.WriteLine("Configuration file updated with encrypted secrets");
+            }
+            return secrets;
         }
 
         private static IHost CreateHostApplication(string[] args, CmdMain cmdMain, AppConfiguration appConfiguration)

@@ -504,7 +504,7 @@ internal sealed class ConfigSecretProtector : IDisposable
   3a. `Commands: [OnCmd]`이고 `Pass`가 빈 프로필이 있을 때 예외 없이 진행
   3b. 1번 실행 뒤 YAML의 `Salt`만 비우고 재실행 → `Configuration error`·종료 코드 2, KEK 금고 항목·DEK 파일 변화 없음
   - 장치 접속 단계는 U9 전이라 연결 실패로 끝나도 된다.
-  4. 정리(완료 조건) — 테스트 YAML의 `CredentialService`는 테스트 전용 이름(`Biz.Bizadm.PowerManager.DeviceConfig.Test`)으로 둔다. 검증 후 같은 이름으로 `IOsKekCredentialStore.RemovePassword()`를 호출해 `true`를 확인하고, Windows 자격 증명 관리자(`cmdkey /list`)에 해당 항목이 없음을 증거로 남긴다.
+  4. 정리(완료 조건) — 테스트 YAML의 `CredentialService`는 테스트 전용 URI(`https://deviceconfig-test.powermanager.local`)로 둔다(GCM 서비스라 절대 URI여야 한다. 구현 중 확인). 검증 후 같은 이름으로 `IOsKekCredentialStore.RemovePassword()`를 호출해 `true`를 확인하고, Windows 자격 증명 관리자(`cmdkey /list`)에 해당 항목이 없음을 증거로 남긴다.
 - **선행 단위**: U7
 
 ### U9. 실행 서비스·콘솔 선택·로그

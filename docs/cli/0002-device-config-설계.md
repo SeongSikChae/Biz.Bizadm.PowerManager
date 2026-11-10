@@ -48,7 +48,7 @@ Main ─ CommandLineParser(--config, --log)
 ```yaml
 ContentRootPath: .
 OsKms:
-  CredentialService: Biz.Bizadm.PowerManager.DeviceConfig
+  CredentialService: https://deviceconfig.powermanager.local   # OS 자격 증명 금고(GCM) 서비스, 절대 URI
   CredentialAccount: kek
   Salt:                 # 최초 기동 시 생성·기록
   Iterations: 600000
