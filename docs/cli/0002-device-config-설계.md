@@ -7,284 +7,176 @@ phase: 설계
 
 # device-config 설계
 
-선행: [0001-device-config-방안](0001-device-config-방안.md) · GitHub: SeongSikChae/Biz.Bizadm.PowerManager#2
+선행: [0001-device-config-방안](0001-device-config-방안.md) · GitHub: SeongSikChae/Biz.Bizadm.PowerManager#6
 
-## 1. 솔루션 구조
+## 1. 프로젝트 구조
 
-규칙 `dotnet/project-creation.md`, `dotnet/console-app-template.md`, `dotnet/kms-config-secrets.md`를 따른다.
+기존 #2 프로젝트 3개를 먼저 삭제한 뒤 아래 프로젝트를 새로 만든다. 규칙 `dotnet/project-creation.md`(net10.0, `.slnx`, CPM, MSTest)와 `dotnet/console-app-template.md`를 따른다.
 
 ```
-Biz.Bizadm.PowerManager.slnx
-Directory.Build.props / Directory.Packages.props   (없으면 생성, CPM, net10.0)
 src/
-  Biz.Bizadm.PowerManager.DeviceConfig/       프로토콜: 메시지 모델, TCP 채널, 세션, 명령
-  Biz.Bizadm.PowerManager.DeviceConfig.App/   실행 진입점: 콘솔 템플릿(Generic Host), YAML, KMS, Serilog
+  Biz.Bizadm.PowerManager.DeviceConfig                    프로토콜·전송·메시지 + HostWifi 공통 API·로더(facade 겸임)
+  Biz.Bizadm.PowerManager.DeviceConfig.HostWifi.Runtime.win    Windows WLAN 구현
+  Biz.Bizadm.PowerManager.DeviceConfig.HostWifi.Runtime.linux  스텁(NotImplementedException)
+  Biz.Bizadm.PowerManager.DeviceConfig.HostWifi.Runtime.osx    스텁(NotImplementedException)
+  Biz.Bizadm.PowerManager.DeviceConfig.App                콘솔 실행 프로그램
 tests/
-  Biz.Bizadm.PowerManager.DeviceConfig.Tests/ MSTest, loopback TcpListener 모의 장치
+  Biz.Bizadm.PowerManager.DeviceConfig.Tests              단위·모의 장치·Device 카테고리 실장비
 ```
 
-- 참조: `DeviceConfig.App` → `DeviceConfig`, `DeviceConfig.Tests` → `DeviceConfig`.
-- `DeviceConfig`는 Hosting·Serilog·YamlDotNet·KMS에 의존하지 않는다(로그는 `Microsoft.Extensions.Logging.Abstractions`만). 나중에 서버(#1) 관리 기능에서 재사용할 수 있게 한다.
-- `Directory.*.props`는 서버(#1) 계획과 공유한다. 먼저 만드는 쪽이 생성하고, 나중 쪽은 항목만 추가한다.
+### 1.1 참조
 
-## 2. 실행 흐름
+| 프로젝트 | 참조 |
+|---|---|
+| `DeviceConfig` | `Microsoft.Extensions.Logging.Abstractions`만 |
+| `HostWifi.Runtime.*` | `DeviceConfig` |
+| `App` | `DeviceConfig` + RID 조건으로 `HostWifi.Runtime.<os>` 하나 |
+| `Tests` | `DeviceConfig` + Windows에서 `HostWifi.Runtime.win`(Device 카테고리용) |
 
+- `HostWifi.Runtime.*` 세 프로젝트의 `AssemblyName`은 모두 `Biz.Bizadm.PowerManager.DeviceConfig.HostWifi.Runtime`이다.
+- `DeviceConfig`의 로더는 `Type.GetType("<Factory 타입>, Biz.Bizadm.PowerManager.DeviceConfig.HostWifi.Runtime")`로 팩터리를 찾고 정적 `Create`를 리플렉션으로 호출한다(`Biz.Bizadm.KMS.Credentials`의 `OsKekCredentialProvider`와 같은 방식). 런타임 어셈블리가 없으면 `InvalidOperationException`.
+- App의 RID 조건: `RuntimeIdentifier`가 `win`/`linux`/`osx`로 시작하면 그 OS, RID가 없으면 빌드 호스트 OS(`$([MSBuild]::IsOSPlatform(...))`)의 `Runtime` 프로젝트를 참조한다. 배포는 `dotnet publish -r <rid>`. NuGet 패키지화는 하지 않는다.
+
+## 2. HostWifi API (`DeviceConfig`)
+
+어댑터를 인자로 받는 상태 없는 API다. 런타임 구현은 이 인터페이스만 구현한다.
+
+```csharp
+public sealed record WifiAdapter(string Id, string Name);
+public sealed record WifiNetwork(string Ssid, int Signal);
+
+public interface IHostWifi
+{
+    Task<IReadOnlyList<WifiAdapter>> ListAdaptersAsync(CancellationToken cancellationToken);
+    Task<IReadOnlyList<WifiNetwork>> ScanAsync(WifiAdapter adapter, CancellationToken cancellationToken);
+    Task<string?> GetCurrentSsidAsync(WifiAdapter adapter, CancellationToken cancellationToken);
+    // 임시 프로필을 만들어 개방형 AP에 연결하고, 연결·IPv4 획득까지 timeout 안에서 기다린다.
+    Task ConnectOpenAsync(WifiAdapter adapter, string ssid, TimeSpan timeout, CancellationToken cancellationToken);
+    Task<IPAddress?> GetGatewayAsync(WifiAdapter adapter, CancellationToken cancellationToken);
+    // previousSsid로 다시 연결하고(null이면 연결 해제) 임시 프로필을 삭제한다.
+    Task RestoreAsync(WifiAdapter adapter, string? previousSsid, CancellationToken cancellationToken);
+}
 ```
-Main ─ CommandLineParser(--config, --log)
-     ─ YAML → AppConfiguration → ConfigurationValidator.Validate      (실패: 2)
-     ─ OsKms: KEK → DEK → (MqttKey 비면 생성) → WifiProfiles[].Pass / MqttKey 암호화·YAML 갱신·복호화 (실패: 2)
-     ─ Host 생성 (Serilog Console + 일별 File)                       (실패: 3)
-     ─ DeviceConfigService(BackgroundService)
-         장치 AP 탐색·PC 접속(3.3절) → 연결 → 핸드셰이크 → Commands 순서 실행
-         → 연결 종료 → PC Wi‑Fi 복구 → StopApplication()
+
+- 로더: `HostWifiLoader.CreateForCurrentOs(ILogger)` → `IHostWifi`(1.1절).
+- `HostWifi.Runtime.linux`·`osx`는 모든 메서드가 `NotImplementedException`을 던진다.
+- Windows `RestoreAsync`는 WLAN 연결에 프로필 이름이 필요하므로 사용 가능 네트워크 목록에서 SSID가 `previousSsid`와 같고 프로필 이름이 있는 항목을 찾아 그 프로필로 연결한다. 찾지 못하면 경고 로그를 남기고 연결을 해제한다.
+- 장치 AP 접속 대기는 설정 `Device.ApConnectTimeoutSeconds`(기본 30)다. 현재 SSID가 장치 AP와 같고 어댑터에 IPv4 게이트웨이가 생길 때까지 기다린다(DHCP 대기 중 APIPA 주소에서 끝나지 않도록). 초과하면 `TimeoutException`으로 실패한다(5절 6단계 복구 후 종료 코드 3).
+
+## 3. 선택 인터페이스 (`DeviceConfig`)
+
+무선 어댑터·장치 AP·공유기 Wi‑Fi 선택은 `DeviceConfig`의 인터페이스로 분리하고, App이 콘솔 번호 선택으로 구현한다. 이후 MCP 등으로 교체할 수 있다.
+
+```csharp
+public interface IDeviceConfigSelector
+{
+    Task<WifiAdapter> SelectAdapterAsync(IReadOnlyList<WifiAdapter> adapters, CancellationToken cancellationToken);
+    Task<WifiNetwork> SelectDeviceApAsync(IReadOnlyList<WifiNetwork> deviceAps, CancellationToken cancellationToken);
+    // 등록 목록 중 장치 apscan 결과에 있는 것만 넘긴다.
+    Task<WifiProfile> SelectWifiProfileAsync(IReadOnlyList<WifiProfileCandidate> candidates, CancellationToken cancellationToken);
+}
 ```
 
-- 실행당 장치 1대. PC가 장치 AP를 찾으면 프로그램이 접속하고, 찾지 못하면 `Device.Host`로 접속한다(사용자가 미리 접속해 둔 경우).
-- 통신 실패(연결·타임아웃·응답 불일치)는 예외로 올린다. 템플릿 기본 동작대로 호스트가 `BackgroundService failed`를 기록하고 정지하며 종료 코드는 `0`이다(템플릿 규칙 7). 성공·실패는 로그로 판단한다.
-- KMS 처리 위치: 규칙상 순서는 설정 로드 → 검증 → KEK → DEK다. 호스트 생성 전에 처리하고, 실패는 종료 코드 `2`(설정 오류)로 본다.
+## 4. 장치 접속 주소
 
-## 3. 설정 스키마 (`AppConfiguration`, YAML, PascalCase)
+장치 AP 접속 뒤 선택한 무선 어댑터의 IPv4 기본 게이트웨이를 장치 주소로 쓴다. 접속 대기 시간 안에 게이트웨이를 얻지 못하면 `TimeoutException`으로 실패한다(2절). PC Wi‑Fi 호출이 `NotImplementedException`(미구현 OS)으로 실패하면 경고를 남기고 `Device.Host`로 접속한다(방안 결정). 그 밖의 PC Wi‑Fi 실패(장치 AP 없음, 권한 거부, 접속 시간 초과 등)는 원인을 보이도록 그대로 실패 처리한다(6절).
+
+## 5. 실행 흐름 (`DeviceConfigRunner`, `DeviceConfig`)
+
+전체 흐름은 `DeviceConfig`의 `DeviceConfigRunner`에 둔다. `IHostWifi`·`IDeviceConfigSelector`·설정을 받아 실행한다. App은 설정 읽기·로그·콘솔 선택 구현만 맡는다.
+
+1. `IHostWifi.ListAdaptersAsync` → `SelectAdapterAsync`
+2. `GetCurrentSsidAsync`로 접속 전 SSID 기억
+3. `ScanAsync`에서 SSID가 `Device.ApPrefix`로 시작하는 AP → `SelectDeviceApAsync`
+4. `ConnectOpenAsync` → `GetGatewayAsync`로 장치 주소 결정(4절)
+5. `Commands`를 순서대로 실행. **명령마다** TCP 연결 → 핸드셰이크 → 명령 → 연결 종료
+6. `ConnectOpenAsync`를 호출했으면 성공·실패·취소와 관계없이 `RestoreAsync(adapter, 접속 전 SSID)`
+
+1~4단계의 PC Wi‑Fi 호출이 `NotImplementedException`이면 경고를 남기고 `Device.Host`로 5단계를 진행한다. 그 밖의 실패는 실행을 멈춘다. `ConnectOpenAsync` 호출 전에 실패했으면 6단계 복구는 하지 않는다.
+
+### 5.1 핸드셰이크
+
+연결마다 `[DUT<-PC] START\n` → `hello tcp SUCCESS_CONNECT\n` → `[DUT->PC] START_OK:<mac>#` 수신. MAC은 설정 JSON·`connectap`에 쓴다. 공장검사 `START`는 핸드셰이크로만 보내고 별도 명령으로 두지 않는다.
+
+수신 프레임은 `#` 프레임(공장검사 응답)과 JSON(중괄호 짝)으로 구분한다. `[DUT->PC] BUTTON_…#` 이벤트 프레임은 #2처럼 건너뛴다. 알려진 한계: JSON 프레임을 중괄호 짝으로 끊으므로 `apscan` 결과의 SSID에 `{`·`}`가 있으면 프레임이 깨진다(#2와 같음).
+
+### 5.2 명령
+
+| 명령 | 핸드셰이크 뒤 송신 | 응답 |
+|---|---|---|
+| `ConnectAp` | `{"command":"apscan"}` → Wi‑Fi 선택 → 설정 JSON → `{"mac":"<mac>","command":"connectap"}` (한 연결 안에서) | 각각 `apscan` 목록, `respone` `OK`, `respone` `OK` |
+| `ApScan` | `{"command":"apscan"}` | `{"SCAN_AP_LIST":{...}}` |
+| `Reboot` | `{"command":"reboot"}` | 미확정(방안 미확인 항목) |
+| `FactoryReset` | `{"command":"factoryreset"}` | `respone` `OK` |
+| `ScanAp` | `[DUT<-PC] SCAN_AP` | `{"SCAN_AP_LIST":{...}}` |
+| `OnCmd` | `[DUT<-PC] ON_CMD` | `ON_CMD_OK#` |
+| `OffCmd` | `[DUT<-PC] OFF_CMD` | `OFF_CMD_OK#` |
+| `Measurement` | `[DUT<-PC] MEASUREMENT` | `MEASUREMENT_W:<값>#` |
+| `OverLoad` | `[DUT<-PC] OVERLOAD` | `#` 프레임 |
+| `TestFactoryReset` | `[DUT<-PC] FACTORY_RESET` | 미확정(방안 미확인 항목) |
+
+응답 대기는 명령마다 `Device.TimeoutSeconds`(기본 10)다. 응답이 표의 형식과 다르면 실패다(`OverLoad`는 `#` 프레임인지만 본다).
+
+## 6. 설정 (YAML, `AppConfiguration`)
+
+키는 속성 이름 그대로(PascalCase). 괄호는 기본값이다.
 
 ```yaml
 ContentRootPath: .
 OsKms:
-  CredentialService: https://deviceconfig.powermanager.local   # OS 자격 증명 금고(GCM) 서비스, 절대 URI
-  CredentialAccount: kek
-  Salt:                 # 최초 기동 시 생성·기록
-  Iterations: 600000
-  SecretsDekFilePath: secrets.dek
+  CredentialService: https://deviceconfig.powermanager.local   # 절대 URI
+  CredentialAccount: deviceconfig
+  Salt:                     # 선택, 최초 기동 시 생성·기록
+  Iterations: 600000        # 선택
+  SecretsDekFilePath: deviceconfig.dek
 Device:
-  ApSsidPrefix: DWD-    # PC Wi‑Fi 스캔에서 장치 AP로 볼 SSID 접두사
-  ApConnectTimeoutSeconds: 30
-  Host: 192.168.244.1     # 장치 AP를 찾지 못했거나 게이트웨이를 못 얻을 때 사용
-  Port: 5000
-  TimeoutSeconds: 5
-  ApScanTimeoutSeconds: 15  # 장치 apscan 응답 대기(스캔이 일반 응답보다 오래 걸릴 수 있음)
-Commands:               # 한 연결에서 순서대로 실행
-  - ConnectAp
-WifiProfiles:           # 등록 Wi‑Fi 목록. ConnectAp 때 ApScan 결과와 대조해 사용자가 선택
-  - Ssid: HomeAP
-    Pass: "********"    # 기동 시 KMS로 암호화(DEKENC:)
-  - Ssid: OfficeAP
-    Pass: "********"
-Settings:               # ConnectAp가 있을 때 필수
-  Mac:                  # 비우면 START_OK 응답의 MAC 사용
-  UserId: user@example.com
-  Company: DAWONDNS
-  Model: B540_W
-  Latitude: "0"
-  Longitude: "0"
-  ApiServerAddr: dwapi.dawonai.com
-  ApiServerPort: "18443"
-  MqttServerAddr: dwmqtt.dawonai.com
-  MqttServerPort: "8883"
-  SslSupport: "yes"     # yes | no
-  Topic: dwd
-  MqttKey:              # 비우면 기동 시 자동 생성. KMS 암호화 후 mqtt_key로 전송
-  Fota:                 # 선택. 있으면 LFota_* 키로 전송
-    Url:
-    Addr:
-    Port:
-    Version:
+  ApPrefix: DWD-            # (DWD-)
+  Host: 192.168.244.1       # (192.168.244.1)
+  Port: 5000                # (5000)
+  TimeoutSeconds: 10        # (10)
+  ApConnectTimeoutSeconds: 30  # (30)
+Commands: [ApScan, ConnectAp]  # 1개 이상 필수, 순서 검사 없음
+WifiProfiles:               # ConnectAp가 있으면 필수
+  - Ssid: MyRouter
+    Pass: plain             # 기동 시 DEKENC:... 로 암호화해 다시 기록
+Settings:                   # ConnectAp가 있으면 필수
+  ApiServerAddr: api.example.local   # string 필수
+  ApiServerPort: 443                 # int 필수
+  ServerAddr: mqtt.example.local     # string 필수
+  ServerPort: 8883                   # int 필수
+  SslSupport: true                   # bool (false) → yes/no
+  UserId: user                       # string 필수
+  Company: DAWONDNS                  # (DAWONDNS)
+  Model: B540_W                      # (B540_W)
+  Lati: ""                           # ("")
+  Long: ""                           # ("")
+  Topic: dwd                         # (dwd)
 ```
 
-- `Device.Port` 기본 5000, `TimeoutSeconds` 기본 5.
-- `Commands`는 1개 이상 필수. 연결을 끝내는 명령(`ConnectAp`, `Reboot`, `FactoryReset`, `TestFactoryReset`)은 장치가 SoftAP를 떠나거나 재부팅하므로 목록의 마지막에 1개만 올 수 있다. 위반하면 설정 오류(종료 코드 2)다.
-- `ConnectAp`가 있으면 `WifiProfiles` 1개 이상(각 `Ssid`·`Pass` 필수, `Ssid` 중복 금지·ASCII)과 `Settings`의 `UserId`·`Model`·`ApiServerAddr`·`ApiServerPort`·`MqttServerAddr`·`MqttServerPort`·`Topic`이 필수다(조건부 검증).
-- 민감 필드: `WifiProfiles[].Pass`, `Settings.MqttKey`. 로그·예외에 평문을 남기지 않는다.
+- OsKms 섹션은 #2와 같고 항상 필수다. 암호화 대상은 `WifiProfiles[].Pass`뿐이다(`mqtt_key`는 설정에 없음). `WifiProfiles`가 비어 있으면 KMS 처리(자격 증명·DEK 파일)를 건너뛴다.
+- 설정 JSON 전송 시 모든 값을 문자열로 바꾼다(`SslSupport` → `yes`/`no`). `mqtt_key`는 실행마다 임의 생성한다.
+- 검증 실패는 종료 코드 2(콘솔 템플릿).
 
-### 3.2 Wi‑Fi 선택
+## 7. `mqtt_key`·Wi‑Fi 대조·로그
 
-`ConnectAp`는 설정 JSON을 보내기 전에 다음을 한다.
+- `mqtt_key`: 실행마다 `RandomNumberGenerator.GetString`으로 `[A-Za-z0-9/]`에서 16자를 뽑는다. 근거: 덤프 설정 섹터 `0x7c062`·`0x7d062`(두 벌 동일)의 값이 16자 `[A-Za-z0-9/]`(Base64 12바이트 형태로 추정), 뒤는 NUL, 필드 칸 33바이트(최대 32자). 설정 파일에 기록하지 않는다.
+- Wi‑Fi 대조: `WifiProfiles[].Ssid`와 장치 `apscan` SSID가 대소문자까지 완전히 같은 것만 후보로 하고 RSSI 높은 순으로 `SelectWifiProfileAsync`에 넘긴다. 후보가 없으면 장치에 설정을 보내지 않고 실패한다(공유기가 장치 SoftAP와 같은 채널이면 빠질 수 있으니 채널을 바꿔 다시 시도하라는 로그를 남긴다).
+- 인코딩: 장치 송수신은 UTF-8로 한다. 한글 등 비ASCII SSID는 지원하지 않는다(장치가 보내는 바이트 형식 미확인).
+- 로그: 송수신 메시지를 Information으로 남긴다. 설정 JSON의 `pass`·`mqtt_key` 값만 `***`로 가린다.
 
-1. 같은 연결에서 `{"command":"apscan"}`을 보내 `SCAN_AP_LIST`를 받는다.
-2. 스캔 항목(`"<ssid>:<rssi>"`)을 마지막 `:` 기준으로 나눈다(SSID에 `:`가 있을 수 있음).
-3. `WifiProfiles`와 SSID가 정확히 같은 항목만 후보로 남기고 RSSI 내림차순으로 정렬한다. 같은 SSID가 여러 번 나오면 가장 강한 RSSI만 쓴다.
-4. 후보를 번호와 함께 콘솔에 출력하고 사용자가 번호를 입력한다. 후보가 1개여도 입력을 받는다.
-5. 후보가 없거나 입력이 잘못되면 예외로 끝낸다(로그에 스캔된 SSID 목록 기록).
+## 8. 테스트
 
-- 대조·정렬 로직(`WifiProfileMatcher`)과 선택 인터페이스(`IWifiProfileSelector`)는 `DeviceConfig` 라이브러리에 둔다. App은 콘솔 구현(`ConsoleWifiProfileSelector`)만 둔다. 나중에 로컬 MCP 등이 같은 인터페이스로 선택을 넘길 수 있다.
-- 콘솔 입력이 리다이렉트된 상태(`Console.IsInputRedirected`)에서도 표준 입력의 한 줄을 읽는다.
-- 위험: `apscan` 응답 형식과, `apscan` 뒤 같은 연결에서 설정·`connectap`을 이어 보낼 수 있는지는 미검증이다(12절).
+테스트 프로젝트는 `Biz.Bizadm.PowerManager.DeviceConfig.Tests` 하나(MSTest).
 
-### 3.3 장치 AP 탐색·PC 접속
-
-근거(덤프 관찰): SoftAP SSID 형식 `DWD-LS120_%02x%02x%02x`(`0xdefc0`), SDK 파라미터 `0xfd0b4`/`0xfe0b4`의 SoftAP 비밀번호는 빈 값이다. 개방형 AP로 추정한다(인증 모드 필드는 미확인).
-
-1. PC Wi‑Fi로 주변 AP를 스캔한다. 무선 어댑터가 없거나 OS 구현이 실패하면 경고 로그 후 `Device.Host`를 쓴다.
-2. SSID가 `ApSsidPrefix`로 시작하는 AP만 후보로 둔다. 후보가 없으면 `Device.Host`를 쓴다.
-3. PC가 이미 후보 AP 중 하나에 접속해 있으면 그 AP를 쓰고 접속·복구를 하지 않는다.
-4. 후보를 RSSI 순으로 출력하고 사용자가 고른다(`IDeviceApSelector`, 후보가 1개여도 입력).
-5. 접속 전 현재 연결(프로필 이름)을 기억하고, 개방형 임시 프로필로 장치 AP에 접속한다.
-6. `ApConnectTimeoutSeconds` 안에 **PC의 현재 연결 SSID가 대상 장치 AP와 같아지고** 그 인터페이스가 IPv4를 받을 때까지 기다린 뒤, 기본 게이트웨이를 `Host`로 쓴다. 게이트웨이를 얻지 못하면 `Device.Host`를 쓴다. 접속 자체가 시간 초과면 예외로 끝낸다.
-   - 실장비(2026-11-10): IPv4만 확인하면 직전 연결의 IP가 남은 순간을 접속 완료로 잘못 판단했다(연속 재접속 시 TCP 연결 시간 초과). PC가 다른 Wi‑Fi에 연결된 상태라면 그 공유기 게이트웨이를 장치 주소로 잡을 수 있으므로 SSID 일치를 먼저 확인한다.
-7. 장치 세션이 끝나면(성공·실패 모두, `finally`) 임시 프로필을 지우고 기억한 연결로 다시 접속한다. 복구 실패는 경고 로그만 남긴다.
-
-OS별 구현(`IHostWifi`, 실행 OS로 선택):
-
-| OS | 스캔 | 접속 | 복구·정리 |
-|---|---|---|---|
-| Windows | Native Wifi API `WlanScan` → `WlanGetAvailableNetworkList`(P/Invoke `wlanapi.dll`) | 개방형 프로필 XML `WlanSetProfile` → `WlanConnect` | `WlanConnect`(기억한 프로필) / `WlanDeleteProfile` |
-| Linux | `nmcli -t -f SSID,SIGNAL,IN-USE dev wifi list --rescan yes` | `nmcli dev wifi connect <ssid> name <임시>` | `nmcli con up <기억한 연결>` / `nmcli con delete <임시>` |
-| macOS | `system_profiler SPAirPortDataType -json` | `networksetup -setairportnetwork <if> <ssid>` | `networksetup -setairportnetwork <if> <기억한 SSID>`(키체인 사용) / `networksetup -removepreferredwirelessnetwork` |
-
-- 외부 명령은 `ProcessStartInfo.ArgumentList`로 인수를 넘기고(셸 미사용) 종료 코드·stderr를 로그로 남긴다.
-- 게이트웨이는 `NetworkInterface.GetIPProperties().GatewayAddresses`로 얻는다. 지원하지 않는 OS(macOS 등)에서는 `Device.Host`를 쓴다.
-- Windows 외 구현은 이 PC에서 실행 검증할 수 없다. 단위 테스트는 명령 출력 파서와 인수 구성까지만 한다.
-
-### 3.1 `mqtt_key` 자동 생성 (임시)
-
-근거:
-
-- 참고 구현에서 `mqtt_key`는 `POST /api/v1/devices/register/create` 응답(`{"verify":..,"mqtt_key":..}`)으로 받는 값이다. 참고 V3(B540 v1.0.30/v1.0.32)는 TCP로 보내지 않았고, V1(v1.0.26)은 TCP로 보냈다.
-- 덤프(관찰): `mqtt_key`는 TCP 설정 키와 등록 응답 키(`status`, `REGISTERED`, `reason`)가 섞인 JSON 키 문자열 묶음(슬롯 A `0x5f097`, 슬롯 B `0xdf1b7`)에 있다. 설정 섹터 `+0x062`의 저장 키는 16자이고 영문 대소문자·숫자와 특수문자 1개로 구성된다. 다음 필드가 `+0x083`이라 최대 32자(+NUL)로 추정한다.
-- 장치는 MQTT 접속 시 이 키를 비밀번호로 쓰는 것으로 추정한다. 서버(#1) 내장 브로커는 아직 인증하지 않는다.
-
-결정:
-
-- 서버(#1)가 키를 발급하기 전까지 CLI가 생성한다. 서버가 `register/create`에서 키를 발급하게 되면 생성 책임을 서버로 옮기고 이 절을 다시 검토한다.
-- `ConnectAp` 실행이고 `MqttKey`가 비어 있으면 KMS 단계에서 16자 키를 생성한다. 문자 집합은 JSON·MQTT 비밀번호에 안전한 `[A-Za-z0-9]`이고, `RandomNumberGenerator.GetString`을 쓴다.
-- 생성한 키는 바로 `DEKENC:`로 암호화해 YAML에 기록한다. 같은 YAML로 다시 실행하면 같은 키를 재사용한다.
-- 로그에는 "생성함/기존 키 사용"만 남기고 값은 남기지 않는다.
-
-위험(수용):
-
-- 펌웨어 1.01.3x가 TCP로 받은 `mqtt_key`를 저장하는지 미확인이다.
-- 장치가 이후 `register/create` 응답으로 키를 덮어쓸 수 있다.
-- 키 값은 YAML에 암호문으로만 남는다. 서버(#1)에 등록하는 방법은 서버 작업에서 정한다.
-
-## 4. 명령 (`DeviceCommand`)
-
-연결 직후 항상 핸드셰이크를 한다: `[DUT<-PC] START\n` → `hello tcp SUCCESS_CONNECT\n` → `[DUT->PC] START_OK:<mac>#` 수신. 이후 `Commands`를 순서대로 실행한다.
-
-| 값 | 송신 | 응답 종료 판정 |
-|---|---|---|
-| `ConnectAp` | `{"command":"apscan"}\n` → 응답 → Wi‑Fi 선택(3.2절) → 설정 JSON `\n` → 응답 → `{"mac":"<mac>","command":"connectap"}\n` | JSON |
-| `ApScan` | `{"command":"apscan"}\n` (결과 SSID·RSSI를 로그로 출력) | JSON |
-| `Reboot` | `{"command":"reboot"}\n` | JSON |
-| `FactoryReset` | `{"command":"factoryreset"}\n` | JSON |
-| `ScanAp` | `[DUT<-PC] SCAN_AP\n` (결과 SSID·RSSI를 로그로 출력, 대기 시간은 `ApScanTimeoutSeconds`) | JSON `{"SCAN_AP_LIST":{...}}` (실장비 확인) |
-| `OnCmd` | `[DUT<-PC] ON_CMD\n` | `#` |
-| `OffCmd` | `[DUT<-PC] OFF_CMD\n` | `#` |
-| `Measurement` | `[DUT<-PC] MEASUREMENT\n` | `#` |
-| `OverLoad` | `[DUT<-PC] OVERLOAD\n` | `#` |
-| `TestFactoryReset` | `[DUT<-PC] FACTORY_RESET\n` | `#` |
-
-- 참고 구현이 검증한 것은 핸드셰이크와 `ConnectAp`뿐이다. 나머지 송신 형식은 정적 분석 문자열에서 추정했다(방안 미확인 항목).
-- 실장비(2026-11-10, B540 1대) 확인: 핸드셰이크, `MEASUREMENT`(`[DUT->PC] MEASUREMENT_W:0.0#`). 공장검사 `SCAN_AP`는 정적 분석 문자열(`SCAN_AP_LIST:`, `%s%s:%d`)과 달리 `#` 프레임이 아니라 apscan 형식의 JSON으로 응답했다.
-- `Reboot`·`FactoryReset` 뒤에는 장치가 연결을 끊을 수 있다. 응답 없이 연결이 끊기면 경고 로그만 남기고 성공으로 본다.
-
-## 5. 설정 JSON (`DeviceSettingsMessage`)
-
-`System.Text.Json`, `JsonPropertyName`, null 값 생략. 키 순서는 참고 구현과 같게 둔다.
-
-| JSON 키 | 설정 | JSON 키 | 설정 |
-|---|---|---|---|
-| `mac` | `Mac` 또는 핸드셰이크 MAC | `user_id` | `UserId` |
-| `api_server_addr` | `ApiServerAddr` | `company` | `Company` |
-| `api_server_port` | `ApiServerPort` | `model` | `Model` |
-| `server_addr` | `MqttServerAddr` | `lati` | `Latitude` |
-| `server_port` | `MqttServerPort` | `long` | `Longitude` |
-| `ssl_support` | `SslSupport` | `topic` | `Topic` |
-| `ssid` | 선택한 `WifiProfiles[].Ssid` | `mqtt_key` | `MqttKey`(자동 생성 가능) |
-| `pass` | 선택한 `WifiProfiles[].Pass` | `LFota_Url`·`LFota_Addr`·`LFota_Port`·`LFota_Version` | `Fota.*`(선택) |
-
-`mqtt_key`는 3.1절에 따라 `ConnectAp`에서 항상 보낸다(설정값 또는 자동 생성값).
-
-## 6. 수신 (구분자 + 타임아웃)
-
-`DeviceChannel.ReceiveAsync(DeviceFrame frame, CancellationToken)`가 버퍼에 누적하며 프레임 하나를 돌려준다.
-
-| 프레임 | 완료 조건 |
+| 종류 | 대상 |
 |---|---|
-| `Test`(`[DUT->PC] ...`) | `#` 수신 |
-| `Json` | `{`부터 중괄호 깊이가 0이 되는 `}` 또는 `\n` |
+| 단위 | 핸드셰이크·응답 파서(`START_OK`, `#` 프레임, `respone`, 비정식 `SCAN_AP_LIST`), 설정 JSON 직렬화·마스킹, `mqtt_key` 형식, Wi‑Fi 대조 |
+| App exe | 설정 검증·종료 코드 시나리오(테스트 프로젝트는 App을 참조하지 않음) |
+| 모의 장치 | 로컬 TCP 모의 장치로 명령별 송수신, 명령마다 재연결, 실패 시 중단. `IHostWifi`·`IDeviceConfigSelector` 모의 객체로 `DeviceConfigRunner` 흐름(미구현 OS → `Device.Host`, 복구 호출) |
+| 실장비(`Device` 카테고리, 기본 실행 제외) | Windows `HostWifi.Runtime.win`으로 실제 장치 AP 접속·복구와 **전체 명령**(상태 변경 명령 포함). 방안 미확인 항목(`Reboot`·`TestFactoryReset` 응답)도 여기서 확인해 처리 방식을 확정한다 |
 
-- 남은 바이트는 다음 수신에 쓴다(조각·병합 응답 대응).
-- 대기 중 `[DUT->PC] BUTTON_ON_EVT#`/`BUTTON_OFF_EVT#` 같은 비요청 이벤트는 로그로 남기고 건너뛴다.
-- `TimeoutSeconds` 안에 완료되지 않으면 받은 내용을 로그로 남기고 `TimeoutException`을 던진다.
-- 인코딩은 ASCII(참고 구현과 같음). SSID에 비ASCII가 있으면 설정 검증에서 거부한다.
+## 9. 실패 처리
 
-## 7. 컴포넌트
-
-### DeviceConfig (`Biz.Bizadm.PowerManager.DeviceConfig`)
-
-| 타입 | 역할 |
-|---|---|
-| `DeviceCommand` | 4절 명령 enum |
-| `DeviceSettings` | 설정 값(라이브러리 입력 모델, YAML과 무관) |
-| `DeviceSettingsMessage`, `DeviceCommandMessage` | 5절 JSON 직렬화 모델 |
-| `IDeviceChannel` / `TcpDeviceChannel` | 연결·송신·6절 프레임 수신 |
-| `DeviceSession` | 핸드셰이크(MAC 보관), 명령별 송수신, 결과 `DeviceResponse`(원문·프레임) 반환 |
-| `WifiProfile` | `Ssid`, `Pass` (복호화된 값) |
-| `ScannedAp`, `ApScanParser` | `SCAN_AP_LIST` 응답 → `(Ssid, Rssi)` 목록 |
-| `WifiProfileMatcher` | 3.2절 대조·중복 제거·RSSI 정렬 → 후보 목록 |
-| `IWifiProfileSelector` | 후보 목록 → 선택 1개(`SelectAsync`). 콘솔·MCP 등 구현 교체 지점 |
-| `HostWifi/IHostWifi` | PC Wi‑Fi: `ScanAsync`, `GetCurrentAsync`, `ConnectOpenAsync`, `RestoreAsync`, `RemoveTemporaryAsync` |
-| `HostWifi/WindowsHostWifi`, `LinuxHostWifi`, `MacHostWifi`, `HostWifiFactory` | 3.3절 OS별 구현(`[SupportedOSPlatform]`)과 실행 OS 선택 |
-| `DeviceApLocator` | 3.3절 1~7 흐름: 후보 필터·선택·접속·게이트웨이 결정, `IAsyncDisposable`로 복구 |
-| `IDeviceApSelector` | 장치 AP 후보 → 선택 1개 |
-
-### DeviceConfig.App (`Biz.Bizadm.PowerManager.DeviceConfig.App`)
-
-| 타입 | 역할 |
-|---|---|
-| `Program`, `ExitCode` | 콘솔 템플릿 그대로 + KMS 단계 |
-| `AppConfiguration` (+`DeviceSection`, `WifiProfileSection`, `SettingsSection`, `FotaSection`, `OsKmsSection`) | 3절 스키마·검증 |
-| `ConsoleWifiProfileSelector`, `ConsoleDeviceApSelector` | 선택 인터페이스 콘솔 구현: 후보 번호 출력, 표준 입력 한 줄 읽기 |
-| `DeviceConfigService : BackgroundService` | 2절 실행, 응답 원문을 Information 로그, 완료 후 `StopApplication()` |
-
-## 8. 로그
-
-- Serilog Console + 일별 File(`Biz.Bizadm.PowerManager.DeviceConfig.App.log`, 12개 보존), `Enrich.WithCaller()`.
-- 송수신 원문을 Information으로 남긴다. 설정 JSON은 `pass`·`mqtt_key` 값을 `***`로 바꿔 기록한다.
-
-## 9. 테스트
-
-`DeviceConfig.Tests`(MSTest)에서 loopback `TcpListener` 모의 장치로 검증한다. 실장비 검증은 9.1절을 따른다.
-
-- 핸드셰이크 송신 바이트와 MAC 파싱
-- `ConnectAp` 송신 순서(apscan → 설정 → connectap)·JSON 키·null 생략·`LFota_*` 포함
-- `ApScanParser`: `:` 포함 SSID, 빈 목록, 형식 오류
-- `WifiProfileMatcher`: 대조·중복 SSID 최대 RSSI·정렬·후보 없음
-- 고정 선택 구현으로 선택한 프로필의 `ssid`·`pass` 전송 확인
-- `DeviceApLocator`: 모의 `IHostWifi`로 접두사 필터·후보 없음 → `Device.Host`·이미 접속 시 접속 생략·예외 시에도 복구 호출
-- nmcli `-t` 출력(`\:` 이스케이프 포함)·system_profiler JSON 파서, 외부 명령 인수 구성
-- Windows: 실제 무선 어댑터로 스캔 결과 조회만 수동 확인(장치 AP 접속은 실장치 필요)
-- 조각난 응답·두 응답이 한 번에 온 경우·`BUTTON_*_EVT` 건너뛰기
-- 타임아웃 예외, 연결 종료 처리
-- 공장검사 명령 송신 문자열
-
-App은 콘솔 템플릿 검증 표(종료 코드 0/1/2/3)와 KMS 첫 기동 암호화·재기동 유지를 빌드된 exe로 확인한다.
-
-### 9.1 실장비 테스트
-
-모의 장치 테스트는 참고 구현과 정적 분석에서 추정한 프로토콜만 검증한다. 12절 미확인 항목은 실장비(B540, 펌웨어 1.01.3x)로 확인한다.
-
-- 방식: 기본 테스트 실행에서 제외되는 MSTest `Device` 카테고리 테스트(환경 변수로 장치 주소를 줄 때만 실행)와 빌드된 exe의 수동 실행을 함께 쓴다. 송수신 원문 로그와 장치 상태(LED·앱·공유기 DHCP·서버 #1 로그)를 증거로 남긴다.
-- 순서: 장치 상태를 덜 바꾸는 것부터 한다. ① PC Wi‑Fi 장치 AP 탐색·접속·복구 → ② 핸드셰이크 → ③ 공장검사 읽기(`Measurement`, `ScanAp`) → ④ `OnCmd`/`OffCmd` → ⑤ `ApScan`(응답 형식·소요 시간) → ⑥ `ConnectAp`(테스트 공유기·서버 #1 대상) → ⑦ `Reboot` → ⑧ `FactoryReset`/`TestFactoryReset`(마지막, 복구 절차 확인 후)
-- 각 단계 결과로 12절 항목을 확정·정정하고, 프로토콜이 다르면 해당 단계(설계·개발)로 회귀한다.
-- 안전: 실장비 테스트 전 원본 펌웨어 덤프(`docs/.tmp/b540-dump1.bin`)를 보관해 두고, 플러그 부하는 분리하거나 저부하로 둔다. `FactoryReset` 계열은 사용자 확인 후에만 실행한다.
-- `ConnectAp` 실장비 테스트는 장치를 제조사 클라우드가 아닌 테스트용 서버(#1)와 공유기로 보낸다. 서버(#1)가 준비되지 않았으면 ⑥ 이후는 장치가 공유기에 접속하는지(DHCP 임대)까지만 확인한다.
-
-## 10. 의존성
-
-- `DeviceConfig`: `Microsoft.Extensions.Logging.Abstractions`
-- `DeviceConfig.App`: 콘솔 템플릿 패키지 + `Biz.Bizadm.KMS`, `Biz.Bizadm.KMS.Credentials`
-- `DeviceConfig.Tests`: MSTest
-- 버전은 개발 단계에서 `nuget-package-selection` 규칙으로 정한다.
-
-## 11. 개발 단계에서 확인할 것
-
-- `Biz.Bizadm.System.Configuration.Extensions`의 `ConfigurationValidator`가 중첩 섹션·목록·조건부 필수를 지원하는지. 지원하지 않으면 조건부 검증을 `Program`의 검증 단계에 둔다.
-
-## 12. 미확인 (실장비 테스트 9.1절에서 확인)
-
-실장비(2026-11-10, B540 1대)에서 확정한 항목: SoftAP 인증 개방형(주변 장치 AP 6개 모두 Open), 장치 SoftAP 게이트웨이 `192.168.244.1`, TCP 포트 `5000`, 핸드셰이크 형식, `MEASUREMENT` 응답, `SCAN_AP_LIST` JSON 형식(공장검사 `SCAN_AP` 응답 기준). 아래는 남은 항목이다.
-
-- 덤프(관찰): `server_addr`·`server_port`는 `api_server_addr`(`0x5f054`/`0xdf174`)·`api_server_port`(`0x5f064`/`0xdf184`)의 끝부분으로만 존재한다. 문자열 끝부분 공유로 파서가 참조하는지, 펌웨어가 이 키를 쓰지 않는지(MQTT 주소를 `device/connect` 응답으로 받는지)는 구분하지 못했다. 참고 V3가 보냈던 키라 그대로 보낸다.
-- 3.1절의 `mqtt_key` TCP 수용 여부.
-- `apscan` 응답 형식(정적 분석 문자열 `{"SCAN_AP_LIST":{"<ssid>:<rssi>",...}}`)과 스캔 소요 시간. 별도 대기 시간 `Device.ApScanTimeoutSeconds`(기본 15)를 두고, 실장비 ⑤단계 결과로 기본값을 조정한다.
-- `apscan` 뒤 같은 연결에서 설정·`connectap`을 이어 보낼 수 있는지.
-- Windows 11 24H2 이후 데스크톱 앱의 Native Wifi 스캔은 위치 서비스 권한이 없으면 접근 거부로 실패할 수 있다. 실패하면 3.3절대로 `Device.Host`로 넘어간다.
-- Linux(NetworkManager 필요)·macOS 구현의 실제 동작. macOS는 Wi‑Fi 스캔에 위치 권한이 필요할 수 있고, `system_profiler` 출력 키가 OS 버전마다 다를 수 있다.
+- 명령 하나가 실패하면(응답 타임아웃, `respone`이 `OK`가 아님, 연결 오류) 남은 명령을 실행하지 않는다.
+- PC Wi‑Fi를 접속 전 상태로 복구한 뒤 종료한다. 종료 코드는 `3`(호스트 실행 중 예외)이다.
+- 이를 위해 App은 `BackgroundService`를 쓰지 않는다. `Program`이 `host.StartAsync()` 뒤 `DeviceConfigRunner.RunAsync()`를 직접 호출하고 `host.StopAsync()`로 끝낸다. 예외는 콘솔 템플릿의 기존 catch(`LogCritical`, 종료 코드 3)로 처리한다.
