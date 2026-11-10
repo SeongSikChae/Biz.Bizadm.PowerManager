@@ -213,7 +213,14 @@ public Task<DeviceResponse> ExecuteAsync(DeviceCommand command, CancellationToke
 };
 ```
 
-`allowDisconnect`이면 `DeviceDisconnectedException`을 경고 로그로 바꾸고 빈 응답을 반환한다. 대상은 연결을 끝내는 명령 중 `Reboot`·`FactoryReset`·`TestFactoryReset`이다(`ConnectAp`는 U5에서 응답을 받는다).
+`allowDisconnect`이면 `DeviceDisconnectedException`을 경고 로그로 바꾸고 빈 응답을 반환한다.
+
+실장비 회귀(2026-11-10): 공장검사 `SCAN_AP`는 `[DUT<-PC] SCAN_AP`를 보내고 응답을 JSON 프레임(`{"SCAN_AP_LIST":{...}}`)으로 받는다. 대기 시간은 `timeouts.ApScan`이고, apscan과 같이 `ApScanParser`로 해석해 로그를 남기되 형식이 달라도 원문을 돌려준다.
+
+```csharp
+DeviceCommand.ScanAp => ScanApAsync($"[DUT<-PC] SCAN_AP", cancellationToken),
+DeviceCommand.ApScan => ScanApAsync(DeviceMessageSerializer.Serialize(new DeviceCommandMessage("apscan")), cancellationToken),
+``` 대상은 연결을 끝내는 명령 중 `Reboot`·`FactoryReset`·`TestFactoryReset`이다(`ConnectAp`는 U5에서 응답을 받는다).
 
 - **검증**: loopback 모의 장치 테스트 — 핸드셰이크 송신 바이트(`[DUT<-PC] START\nhello tcp SUCCESS_CONNECT\n`)·MAC 파싱·실패 응답 예외, 명령별 송신 문자열, `Reboot`·`FactoryReset`·`TestFactoryReset` 후 연결 종료 허용
 - **선행 단위**: U3
@@ -358,11 +365,19 @@ public async ValueTask DisposeAsync()
 }
 ```
 
+실장비 회귀(2026-11-10): `ResolveAsync`는 IPv4만 보지 않고, 매 폴링마다 `hostWifi.GetCurrentAsync()`의 SSID가 대상과 같을 때만 IPv4·게이트웨이를 받아들인다(직전 연결의 남은 IP를 접속 완료로 오판하던 문제).
+
+```csharp
+HostWifiConnection? current = await TryGetCurrentAsync(cancellationToken);
+InterfaceAddressState? state = current?.Ssid == connection.Ssid ? inspector.Inspect(connection.InterfaceId) : null;
+if (state is { HasIPv4: true }) { /* 게이트웨이 또는 Device.Host */ }
+```
+
 `ProcessRunner`는 `ProcessStartInfo.ArgumentList`로 인수를 넘기고(셸 미사용), 종료 코드 0이 아니면 stderr를 담아 예외를 던진다. 테스트용으로 `IProcessRunner` 인터페이스를 둔다.
 
 - **검증**:
   - 단위 테스트 — nmcli 이스케이프·`IN-USE` 표시, `system_profiler` JSON(현재 연결·주변 네트워크), Linux/macOS 명령 인수(가짜 `IProcessRunner`), Windows 프로필 XML 이스케이프
-  - `DeviceApLocator` — 가짜 `IHostWifi`로 미지원(null)·스캔 실패·후보 없음 → `Device.Host`, 이미 접속 시 접속 생략, 선택 후 접속, `DisposeAsync`가 임시 삭제·복구 호출, 복구 예외 삼킴
+  - `DeviceApLocator` — 가짜 `IHostWifi`로 미지원(null)·스캔 실패·후보 없음 → `Device.Host`, 이미 접속 시 접속 생략, 선택 후 접속, `DisposeAsync`가 임시 삭제·복구 호출, 복구 예외 삼킴, 접속 직후 현재 SSID가 아직 이전 네트워크면 IPv4가 있어도 기다림·끝내 바뀌지 않으면 시간 초과
   - 수동(Windows) — 실제 무선 어댑터로 `WindowsHostWifi.ScanAsync`·`GetCurrentAsync` 결과 조회(테스트 카테고리 `Manual`). 환경 변수 `B540_MANUAL_WIFI=1`이 없으면 `Assert.Inconclusive`로 건너뛴다. 실행: `$env:B540_MANUAL_WIFI='1'; dotnet test tests/Biz.Bizadm.PowerManager.DeviceConfig.Tests --filter "TestCategory=Manual"`. 위치 서비스 권한이 꺼져 접근 거부가 나면 그 결과(오류 코드)를 기록하고, `DeviceApLocator`가 `Device.Host`로 넘어가는지 확인한다.
 - **선행 단위**: U1 (U2~U5와 독립)
 
@@ -602,6 +617,7 @@ dotnet test tests/Biz.Bizadm.PowerManager.DeviceConfig.Tests --filter "TestCateg
 | ⑦ | `Reboot` | 응답 또는 연결 종료 처리 |
 | ⑧ | `FactoryReset` / `TestFactoryReset` | 장치 AP 재등장, 설정 초기화 여부 |
 
+- 구현(2026-11-10): `tests/.../Device/RealDeviceTests.cs`. `B540_DEVICE_SSID`를 주면 테스트가 PC Wi‑Fi로 그 SSID(정확히 일치)에만 접속하고 끝나면 복구한다. 없으면 `B540_DEVICE_HOST`(PC가 미리 접속). 상태를 바꾸는 명령은 테스트에 넣지 않고 exe로 단계별 확인 후 실행한다. 공장검사 `ScanAp`은 JSON 응답(`ApScanParser` 1개 이상)으로 검증한다.
 - 결과는 `docs/cli/`에 새 순번 문서(`XXXX-device-config-실장비.md`)로 남기고, 설계 12절 미확인 항목을 확정·정정한다. 추정과 실제가 다르면 해당 단계(설계·개발)로 회귀한다.
 - 장치·공유기 식별자(MAC, SSID, 비밀번호, `mqtt_key`)는 기록 시 마스킹한다.
 - **선행 단위**: U9, 실장비 확보

@@ -116,7 +116,8 @@ Settings:               # ConnectAp가 있을 때 필수
 3. PC가 이미 후보 AP 중 하나에 접속해 있으면 그 AP를 쓰고 접속·복구를 하지 않는다.
 4. 후보를 RSSI 순으로 출력하고 사용자가 고른다(`IDeviceApSelector`, 후보가 1개여도 입력).
 5. 접속 전 현재 연결(프로필 이름)을 기억하고, 개방형 임시 프로필로 장치 AP에 접속한다.
-6. `ApConnectTimeoutSeconds` 안에 IPv4를 받을 때까지 기다린 뒤 해당 인터페이스의 기본 게이트웨이를 `Host`로 쓴다. 게이트웨이를 얻지 못하면 `Device.Host`를 쓴다. 접속 자체가 시간 초과면 예외로 끝낸다.
+6. `ApConnectTimeoutSeconds` 안에 **PC의 현재 연결 SSID가 대상 장치 AP와 같아지고** 그 인터페이스가 IPv4를 받을 때까지 기다린 뒤, 기본 게이트웨이를 `Host`로 쓴다. 게이트웨이를 얻지 못하면 `Device.Host`를 쓴다. 접속 자체가 시간 초과면 예외로 끝낸다.
+   - 실장비(2026-11-10): IPv4만 확인하면 직전 연결의 IP가 남은 순간을 접속 완료로 잘못 판단했다(연속 재접속 시 TCP 연결 시간 초과). PC가 다른 Wi‑Fi에 연결된 상태라면 그 공유기 게이트웨이를 장치 주소로 잡을 수 있으므로 SSID 일치를 먼저 확인한다.
 7. 장치 세션이 끝나면(성공·실패 모두, `finally`) 임시 프로필을 지우고 기억한 연결로 다시 접속한다. 복구 실패는 경고 로그만 남긴다.
 
 OS별 구현(`IHostWifi`, 실행 OS로 선택):
@@ -162,7 +163,7 @@ OS별 구현(`IHostWifi`, 실행 OS로 선택):
 | `ApScan` | `{"command":"apscan"}\n` (결과 SSID·RSSI를 로그로 출력) | JSON |
 | `Reboot` | `{"command":"reboot"}\n` | JSON |
 | `FactoryReset` | `{"command":"factoryreset"}\n` | JSON |
-| `ScanAp` | `[DUT<-PC] SCAN_AP\n` | `#` |
+| `ScanAp` | `[DUT<-PC] SCAN_AP\n` (결과 SSID·RSSI를 로그로 출력, 대기 시간은 `ApScanTimeoutSeconds`) | JSON `{"SCAN_AP_LIST":{...}}` (실장비 확인) |
 | `OnCmd` | `[DUT<-PC] ON_CMD\n` | `#` |
 | `OffCmd` | `[DUT<-PC] OFF_CMD\n` | `#` |
 | `Measurement` | `[DUT<-PC] MEASUREMENT\n` | `#` |
@@ -170,6 +171,7 @@ OS별 구현(`IHostWifi`, 실행 OS로 선택):
 | `TestFactoryReset` | `[DUT<-PC] FACTORY_RESET\n` | `#` |
 
 - 참고 구현이 검증한 것은 핸드셰이크와 `ConnectAp`뿐이다. 나머지 송신 형식은 정적 분석 문자열에서 추정했다(방안 미확인 항목).
+- 실장비(2026-11-10, B540 1대) 확인: 핸드셰이크, `MEASUREMENT`(`[DUT->PC] MEASUREMENT_W:0.0#`). 공장검사 `SCAN_AP`는 정적 분석 문자열(`SCAN_AP_LIST:`, `%s%s:%d`)과 달리 `#` 프레임이 아니라 apscan 형식의 JSON으로 응답했다.
 - `Reboot`·`FactoryReset` 뒤에는 장치가 연결을 끊을 수 있다. 응답 없이 연결이 끊기면 경고 로그만 남기고 성공으로 본다.
 
 ## 5. 설정 JSON (`DeviceSettingsMessage`)
@@ -278,10 +280,11 @@ App은 콘솔 템플릿 검증 표(종료 코드 0/1/2/3)와 KMS 첫 기동 암�
 
 ## 12. 미확인 (실장비 테스트 9.1절에서 확인)
 
+실장비(2026-11-10, B540 1대)에서 확정한 항목: SoftAP 인증 개방형(주변 장치 AP 6개 모두 Open), 장치 SoftAP 게이트웨이 `192.168.244.1`, TCP 포트 `5000`, 핸드셰이크 형식, `MEASUREMENT` 응답, `SCAN_AP_LIST` JSON 형식(공장검사 `SCAN_AP` 응답 기준). 아래는 남은 항목이다.
+
 - 덤프(관찰): `server_addr`·`server_port`는 `api_server_addr`(`0x5f054`/`0xdf174`)·`api_server_port`(`0x5f064`/`0xdf184`)의 끝부분으로만 존재한다. 문자열 끝부분 공유로 파서가 참조하는지, 펌웨어가 이 키를 쓰지 않는지(MQTT 주소를 `device/connect` 응답으로 받는지)는 구분하지 못했다. 참고 V3가 보냈던 키라 그대로 보낸다.
 - 3.1절의 `mqtt_key` TCP 수용 여부.
 - `apscan` 응답 형식(정적 분석 문자열 `{"SCAN_AP_LIST":{"<ssid>:<rssi>",...}}`)과 스캔 소요 시간. 별도 대기 시간 `Device.ApScanTimeoutSeconds`(기본 15)를 두고, 실장비 ⑤단계 결과로 기본값을 조정한다.
 - `apscan` 뒤 같은 연결에서 설정·`connectap`을 이어 보낼 수 있는지.
-- 장치 SoftAP 인증 모드(비밀번호 빈 값만 관찰).
 - Windows 11 24H2 이후 데스크톱 앱의 Native Wifi 스캔은 위치 서비스 권한이 없으면 접근 거부로 실패할 수 있다. 실패하면 3.3절대로 `Device.Host`로 넘어간다.
 - Linux(NetworkManager 필요)·macOS 구현의 실제 동작. macOS는 Wi‑Fi 스캔에 위치 권한이 필요할 수 있고, `system_profiler` 출력 키가 OS 버전마다 다를 수 있다.
