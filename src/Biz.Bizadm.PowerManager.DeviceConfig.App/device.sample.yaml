@@ -1,0 +1,48 @@
+# B540 장치 설정 도구 샘플 설정
+# 실행: Biz.Bizadm.PowerManager.DeviceConfig.App --config device.yaml --log logs
+#
+# 주의
+# - WifiProfiles[].Pass, Settings.MqttKey는 첫 실행 때 KMS(OsKms)로 암호화(DEKENC:)되고 이 파일이 다시 쓰인다.
+#   다시 쓸 때 주석은 사라진다. 운영 값은 이 샘플에 넣지 말고 복사본에서 쓴다.
+# - OsKms.Salt는 비워 두면 첫 실행 때 생성·기록된다. DEK 파일이 있는데 Salt만 비우면 설정 오류로 끝난다.
+ContentRootPath: .
+OsKms:
+  CredentialService: Biz.Bizadm.PowerManager.DeviceConfig
+  CredentialAccount: kek
+  Salt:
+  Iterations: 600000
+  SecretsDekFilePath: secrets.dek
+Device:
+  ApSsidPrefix: DWD-          # PC Wi-Fi 스캔에서 장치 AP로 볼 SSID 접두사
+  ApConnectTimeoutSeconds: 30
+  Host: 192.168.4.1           # 장치 AP를 찾지 못했거나 게이트웨이를 못 얻을 때 사용
+  Port: 5000
+  TimeoutSeconds: 5
+  ApScanTimeoutSeconds: 15    # 장치 apscan 응답 대기
+# 한 연결에서 순서대로 실행. ConnectAp, Reboot, FactoryReset, TestFactoryReset은 마지막에만 둘 수 있다.
+# 값: ConnectAp, ApScan, Reboot, FactoryReset, ScanAp, OnCmd, OffCmd, Measurement, OverLoad, TestFactoryReset
+Commands:
+  - ConnectAp
+# 등록 Wi-Fi. ConnectAp 때 장치 apscan 결과와 대조해 콘솔에서 고른다.
+WifiProfiles:
+  - Ssid: HomeAP
+    Pass: change-me
+Settings:                     # ConnectAp가 있을 때 필수
+  Mac:                        # 비우면 장치 START_OK 응답의 MAC
+  UserId: user@example.com
+  Company: DAWONDNS
+  Model: B540_W
+  Latitude: "0"
+  Longitude: "0"
+  ApiServerAddr: api.example.local
+  ApiServerPort: "18443"
+  MqttServerAddr: mqtt.example.local
+  MqttServerPort: "8883"
+  SslSupport: "yes"           # yes | no
+  Topic: dwd
+  MqttKey:                    # 비우면 자동 생성(16자 [A-Za-z0-9])
+  Fota:                       # 선택. 값이 있는 항목만 LFota_*로 전송
+    Url:
+    Addr:
+    Port:
+    Version:
