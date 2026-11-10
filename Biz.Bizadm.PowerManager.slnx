@@ -1,1 +1,9 @@
-<Solution />
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Biz.Bizadm.PowerManager.DeviceConfig.App/Biz.Bizadm.PowerManager.DeviceConfig.App.csproj" />
+    <Project Path="src/Biz.Bizadm.PowerManager.DeviceConfig/Biz.Bizadm.PowerManager.DeviceConfig.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Biz.Bizadm.PowerManager.DeviceConfig.Tests/Biz.Bizadm.PowerManager.DeviceConfig.Tests.csproj" />
+  </Folder>
+</Solution>
