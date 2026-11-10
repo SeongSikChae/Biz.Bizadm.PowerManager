@@ -60,7 +60,7 @@ public interface IHostWifi
 
 - 로더: `HostWifiLoader.CreateForCurrentOs(ILogger)` → `IHostWifi`(1.1절).
 - `HostWifi.Runtime.linux`·`osx`는 모든 메서드가 `NotImplementedException`을 던진다.
-- Windows `RestoreAsync`는 WLAN 연결에 프로필 이름이 필요하므로 사용 가능 네트워크 목록에서 SSID가 `previousSsid`와 같고 프로필 이름이 있는 항목을 찾아 그 프로필로 연결한다. 찾지 못하면 경고 로그를 남기고 연결을 해제한다.
+- Windows `RestoreAsync`는 WLAN 연결에 프로필 이름이 필요하므로 사용 가능 네트워크 목록에서 SSID가 `previousSsid`와 같고 프로필 이름이 있는 항목을 찾아 그 프로필로 연결한다. 찾지 못하면 경고 로그를 남기고 연결을 해제한다. 임시 프로필은 재연결 전에 먼저 삭제한다(U8 실측: 재연결 요청 뒤에 연결 중인 임시 프로필을 지우면 Windows가 연결을 끊어 재연결이 취소됨).
 - 장치 AP 접속 대기는 설정 `Device.ApConnectTimeoutSeconds`(기본 30)다. 현재 SSID가 장치 AP와 같고 어댑터에 IPv4 게이트웨이가 생길 때까지 기다린다(DHCP 대기 중 APIPA 주소에서 끝나지 않도록). 초과하면 `TimeoutException`으로 실패한다(5절 6단계 복구 후 종료 코드 3).
 
 ## 3. 선택 인터페이스 (`DeviceConfig`)
@@ -106,14 +106,14 @@ public interface IDeviceConfigSelector
 |---|---|---|
 | `ConnectAp` | `{"command":"apscan"}` → Wi‑Fi 선택 → 설정 JSON → `{"mac":"<mac>","command":"connectap"}` (한 연결 안에서) | 각각 `apscan` 목록, `respone` `OK`, `respone` `OK` |
 | `ApScan` | `{"command":"apscan"}` | `{"SCAN_AP_LIST":{...}}` |
-| `Reboot` | `{"command":"reboot"}` | 미확정(방안 미확인 항목) |
+| `Reboot` | `{"command":"reboot"}` | 응답이 오면 그대로, 대기 시간 초과·연결 종료면 경고 후 성공(U8 실측: 응답 없이 타임아웃, mac 포함 형식도 같음) |
 | `FactoryReset` | `{"command":"factoryreset"}` | `respone` `OK` |
 | `ScanAp` | `[DUT<-PC] SCAN_AP` | `{"SCAN_AP_LIST":{...}}` |
 | `OnCmd` | `[DUT<-PC] ON_CMD` | `ON_CMD_OK#` |
 | `OffCmd` | `[DUT<-PC] OFF_CMD` | `OFF_CMD_OK#` |
 | `Measurement` | `[DUT<-PC] MEASUREMENT` | `MEASUREMENT_W:<값>#` |
-| `OverLoad` | `[DUT<-PC] OVERLOAD` | `#` 프레임 |
-| `TestFactoryReset` | `[DUT<-PC] FACTORY_RESET` | 미확정(방안 미확인 항목) |
+| `OverLoad` | `[DUT<-PC] OVERLOAD` | `#` 프레임(U8 실측 `[DUT->PC] OVERLOAD_A:0.160#`) |
+| `TestFactoryReset` | `[DUT<-PC] FACTORY_RESET` | `Reboot`와 같음(U8 실측: 응답·연결 종료 없이 타임아웃) |
 
 응답 대기는 명령마다 `Device.TimeoutSeconds`(기본 10)다. 응답이 표의 형식과 다르면 실패다(`OverLoad`는 `#` 프레임인지만 본다).
 
@@ -154,6 +154,7 @@ Settings:                   # ConnectAp가 있으면 필수
 ```
 
 - OsKms 섹션은 #2와 같고 항상 필수다. 암호화 대상은 `WifiProfiles[].Pass`뿐이다(`mqtt_key`는 설정에 없음). `WifiProfiles`가 비어 있으면 KMS 처리(자격 증명·DEK 파일)를 건너뛴다.
+- 최초 실행의 KMS 처리(Salt 생성 → 자격 증명 저장 → DEK 파일 생성 → 설정 파일 재기록)가 중간에 실패하면 이후 실행이 `OsKms.Salt is empty but the DEK file exists`로 실패한다. 복구: 메시지에 나온 DEK 파일을 지우고, 설정 파일의 `Pass`를 평문으로 다시 넣은 뒤(`Salt`는 비움) 실행한다.
 - 설정 JSON 전송 시 모든 값을 문자열로 바꾼다(`SslSupport` → `yes`/`no`). `mqtt_key`는 실행마다 임의 생성한다.
 - 검증 실패는 종료 코드 2(콘솔 템플릿).
 

@@ -2,6 +2,7 @@ using Microsoft.Extensions.Logging;
 using System.Net;
 using System.Net.NetworkInformation;
 using System.Net.Sockets;
+using System.Runtime.ExceptionServices;
 using System.Security;
 
 namespace Biz.Bizadm.PowerManager.DeviceConfig.HostWifi
@@ -89,31 +90,26 @@ namespace Biz.Bizadm.PowerManager.DeviceConfig.HostWifi
             if (previousSsid is not null && profile is null)
                 logger.LogWarning("Profile for previous Wi-Fi {Ssid} not found; disconnecting", previousSsid);
 
-            bool failed = false;
+            // 임시 프로필을 먼저 지운다. 연결 중인 임시 프로필을 재연결 요청 뒤에 지우면 Windows가 연결을 끊어
+            // 진행 중이던 이전 Wi-Fi 재연결이 취소된다(U8 실측: 공유기 연결 상태에서 시작했을 때 연결 해제로 끝남).
+            Exception? deleteError = null;
             try
             {
-                if (profile is null)
-                    client.Disconnect(id);
-                else
-                    client.Connect(id, profile);
+                client.DeleteProfile(id, TemporaryProfileName);
             }
-            catch
+            catch (Exception ex)
             {
-                failed = true;
-                throw;
+                deleteError = ex;
+                logger.LogError(ex, "Failed to delete temporary profile {Profile}", TemporaryProfileName);
             }
-            finally
-            {
-                try
-                {
-                    client.DeleteProfile(id, TemporaryProfileName); // 재연결이 실패해도 임시 프로필은 지운다
-                }
-                catch (Exception ex) when (failed)
-                {
-                    // 재연결 예외를 가리지 않도록 삭제 실패는 로그만 남긴다
-                    logger.LogError(ex, "Failed to delete temporary profile {Profile}", TemporaryProfileName);
-                }
-            }
+
+            // 재연결은 삭제가 실패해도 시도하며, 재연결 예외가 삭제 예외보다 우선한다
+            if (profile is null)
+                client.Disconnect(id);
+            else
+                client.Connect(id, profile);
+            if (deleteError is not null)
+                ExceptionDispatchInfo.Throw(deleteError);
             return Task.CompletedTask;
         }
 

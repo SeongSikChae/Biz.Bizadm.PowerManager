@@ -185,6 +185,22 @@ namespace Biz.Bizadm.PowerManager.DeviceConfig.Tests.Transport
         }
 
         [TestMethod]
+        [DataRow(DeviceCommand.Reboot, "{\"command\":\"reboot\"}", false)]
+        [DataRow(DeviceCommand.Reboot, "{\"command\":\"reboot\"}", true)]
+        [DataRow(DeviceCommand.TestFactoryReset, "[DUT<-PC] FACTORY_RESET", false)]
+        [DataRow(DeviceCommand.TestFactoryReset, "[DUT<-PC] FACTORY_RESET", true)]
+        public async Task ExecuteAsync_RebootLikeNoResponse_WarnsAndSucceeds(DeviceCommand command, string line, bool close)
+        {
+            await using MockDevice device = new(l => l == line ? (close ? MockDevice.Close : null) : Default(l));
+            ListLogger logger = new();
+
+            string response = await Client(device, logger).ExecuteAsync(command, TestContext.CancellationToken);
+
+            Assert.AreEqual("(no response)", response);
+            StringAssert.Contains(logger.AllText, $"Warning: {command}: no response");
+        }
+
+        [TestMethod]
         public async Task ExecuteAsync_ClosedBeforeResponse_Throws()
         {
             await using MockDevice device = new(line => line == "[DUT<-PC] MEASUREMENT" ? MockDevice.Close : Default(line));

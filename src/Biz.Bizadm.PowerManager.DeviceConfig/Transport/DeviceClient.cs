@@ -17,13 +17,13 @@ namespace Biz.Bizadm.PowerManager.DeviceConfig.Transport
             {
                 DeviceCommand.ApScan => EnsureScanList(await connection.RequestAsync(DeviceMessages.Command("apscan"), cancellationToken)),
                 DeviceCommand.FactoryReset => DeviceResponseParser.EnsureOk(await connection.RequestAsync(DeviceMessages.Command("factoryreset"), cancellationToken)),
-                DeviceCommand.Reboot => await connection.RequestAsync(DeviceMessages.Command("reboot"), cancellationToken), // 응답 처리는 U8에서 확정
+                DeviceCommand.Reboot => await RequestOrWarnAsync(connection, command, DeviceMessages.Command("reboot"), cancellationToken),
                 DeviceCommand.ScanAp => EnsureScanList(await connection.RequestAsync(DeviceMessages.Test("SCAN_AP"), cancellationToken)),
                 DeviceCommand.OnCmd => Expect(await connection.RequestAsync(DeviceMessages.Test("ON_CMD"), cancellationToken), OnCmdOkRegex()),
                 DeviceCommand.OffCmd => Expect(await connection.RequestAsync(DeviceMessages.Test("OFF_CMD"), cancellationToken), OffCmdOkRegex()),
                 DeviceCommand.Measurement => Expect(await connection.RequestAsync(DeviceMessages.Test("MEASUREMENT"), cancellationToken), MeasurementRegex()),
                 DeviceCommand.OverLoad => Expect(await connection.RequestAsync(DeviceMessages.Test("OVERLOAD"), cancellationToken), TestFrameRegex()),
-                DeviceCommand.TestFactoryReset => await connection.RequestAsync(DeviceMessages.Test("FACTORY_RESET"), cancellationToken), // 응답 처리는 U8에서 확정
+                DeviceCommand.TestFactoryReset => await RequestOrWarnAsync(connection, command, DeviceMessages.Test("FACTORY_RESET"), cancellationToken),
                 _ => throw new ArgumentOutOfRangeException(nameof(command), command, "Use ConnectApAsync for ConnectAp"),
             };
         }
@@ -43,6 +43,23 @@ namespace Biz.Bizadm.PowerManager.DeviceConfig.Transport
             logger.LogInformation("TX {Message}", settings.ToJson(mac, ssid, pass, mqttKey, masked: true).TrimEnd('\n'));
             DeviceResponseParser.EnsureOk(await connection.RequestAsync(settings.ToJson(mac, ssid, pass, mqttKey), cancellationToken, logSend: false));
             DeviceResponseParser.EnsureOk(await connection.RequestAsync(DeviceMessages.ConnectAp(mac), cancellationToken));
+        }
+
+        /// <summary>
+        /// 장치가 응답·연결 종료 없이 재부팅·초기화하는 명령(Reboot, TestFactoryReset).
+        /// 응답이 오면 그대로, 대기 시간 초과나 연결 종료면 경고를 남기고 성공으로 본다(U8 실장비: 두 명령 모두 응답 없이 타임아웃).
+        /// </summary>
+        private async Task<string> RequestOrWarnAsync(DeviceConnection connection, DeviceCommand command, string message, CancellationToken cancellationToken)
+        {
+            try
+            {
+                return await connection.RequestAsync(message, cancellationToken);
+            }
+            catch (Exception ex) when (ex is TimeoutException or IOException)
+            {
+                logger.LogWarning("{Command}: no response ({Reason}); treated as sent", command, ex.Message);
+                return "(no response)";
+            }
         }
 
         private static string EnsureScanList(string frame)
