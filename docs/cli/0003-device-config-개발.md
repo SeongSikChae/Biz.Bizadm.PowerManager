@@ -443,7 +443,7 @@ internal sealed class WindowsHostWifi(ILogger logger) : IHostWifi
 }
 ```
 
-**검증**: `Device` 카테고리 테스트(장치 전원 켠 상태, 수동 실행) — 어댑터 목록, `DWD-` AP 스캔, `ConnectOpenAsync` 후 게이트웨이 `192.168.244.1`(공유기에 연결된 상태에서 시작해도 같음), `RestoreAsync` 뒤 이전 상태 복귀·임시 프로필 삭제(`netsh wlan show profiles`), Wi‑Fi 연결 해제 상태에서 시작 → 접속 후 복구하면 연결 해제 상태(이전 SSID가 있는데 프로필을 못 찾는 경고·연결 해제 경로는 재현이 어려워 검증하지 않는다), 존재하지 않는 SSID로 `ConnectOpenAsync`(timeout 5s) 시 예외로 실패(`TimeoutException` 예상, `WlanConnect`가 즉시 오류를 주면 다른 예외일 수 있어 종류는 실행해 보고 확정), 그 뒤 `RestoreAsync`로 이전 상태 복귀·임시 프로필 삭제.
+**검증**: `Device` 카테고리 테스트(장치 전원 켠 상태, 수동 실행) — 어댑터 목록, `DWD-` AP 스캔, `ConnectOpenAsync` 후 게이트웨이 `192.168.244.1`(공유기에 연결된 상태에서 시작해도 같음), `RestoreAsync` 뒤 이전 상태 복귀·임시 프로필 삭제(`netsh wlan show profiles`), Wi‑Fi 연결 해제 상태에서 시작 → 접속 후 복구하면 연결 해제 상태(이전 SSID가 있는데 프로필을 못 찾는 경고·연결 해제 경로는 재현이 어려워 검증하지 않는다), 존재하지 않는 SSID로 `ConnectOpenAsync`(timeout 5s) 시 `TimeoutException`(U6 실측으로 확정: `WlanConnect`는 바로 성공을 돌려줌), 그 뒤 `RestoreAsync`로 이전 상태 복귀·임시 프로필 삭제.
 
 ## U7. App
 
