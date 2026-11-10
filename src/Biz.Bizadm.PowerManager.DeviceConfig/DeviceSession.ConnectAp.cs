@@ -2,6 +2,7 @@ using Biz.Bizadm.PowerManager.DeviceConfig.Messages;
 using Biz.Bizadm.PowerManager.DeviceConfig.Transport;
 using Biz.Bizadm.PowerManager.DeviceConfig.Wifi;
 using Microsoft.Extensions.Logging;
+using System.Text.Json;
 
 namespace Biz.Bizadm.PowerManager.DeviceConfig
 {
@@ -10,7 +11,7 @@ namespace Biz.Bizadm.PowerManager.DeviceConfig
         /// <summary>
         /// apscan → 등록 Wi‑Fi 대조·선택 → 설정 JSON → connectap.
         /// </summary>
-        /// <exception cref="DeviceProtocolException">스캔 결과에 등록 Wi‑Fi가 없다.</exception>
+        /// <exception cref="DeviceProtocolException">스캔 결과에 등록 Wi‑Fi가 없거나 설정·connectap 응답이 OK가 아니다.</exception>
         public async Task<DeviceResponse> ConnectApAsync(DeviceSettings settings, IWifiProfileSelector selector, CancellationToken cancellationToken)
         {
             string mac = string.IsNullOrEmpty(settings.Mac) ? Mac : settings.Mac;
@@ -30,10 +31,32 @@ namespace Biz.Bizadm.PowerManager.DeviceConfig
 
             string json = DeviceMessageSerializer.Serialize(DeviceSettingsMessage.From(settings, chosen, mac));
             await channel.SendLineAsync(json, cancellationToken, DeviceMessageSerializer.Mask(json));
-            await channel.ReceiveAsync(DeviceFrame.Json, timeouts.Response, cancellationToken);
+            EnsureOk("settings", await channel.ReceiveAsync(DeviceFrame.Json, timeouts.Response, cancellationToken));
 
             await channel.SendLineAsync(DeviceMessageSerializer.Serialize(new DeviceCommandMessage("connectap", mac)), cancellationToken);
-            return new DeviceResponse(await channel.ReceiveAsync(DeviceFrame.Json, timeouts.Response, cancellationToken));
+            string connectResponse = await channel.ReceiveAsync(DeviceFrame.Json, timeouts.Response, cancellationToken);
+            EnsureOk("connectap", connectResponse);
+            return new DeviceResponse(connectResponse);
+        }
+
+        /// <summary>
+        /// 실장비 응답 <c>{"mac":"&lt;mac&gt;","respone":"OK"}</c>을 확인한다. 키 이름은 펌웨어 오타 그대로다.
+        /// </summary>
+        private static void EnsureOk(string step, string raw)
+        {
+            try
+            {
+                using JsonDocument document = JsonDocument.Parse(raw);
+                if (document.RootElement.ValueKind == JsonValueKind.Object
+                    && document.RootElement.TryGetProperty("respone", out JsonElement value)
+                    && value.ValueKind == JsonValueKind.String
+                    && value.GetString() == "OK")
+                    return;
+            }
+            catch (JsonException)
+            {
+            }
+            throw new DeviceProtocolException($"Unexpected {step} response: {raw}");
         }
 
         private void LogScanned(IReadOnlyList<ScannedAp> scanned)

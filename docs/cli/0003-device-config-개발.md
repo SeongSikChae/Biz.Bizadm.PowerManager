@@ -265,15 +265,26 @@ public async Task<DeviceResponse> ConnectApAsync(DeviceSettings settings, IWifiP
     string mac = string.IsNullOrEmpty(settings.Mac) ? Mac : settings.Mac; // YAML 빈 문자열 대응
     string json = DeviceMessageSerializer.Serialize(DeviceSettingsMessage.From(settings, chosen, mac));
     await channel.SendLineAsync(json, ct, logText: DeviceMessageSerializer.Mask(json));
-    string settingsResponse = await channel.ReceiveAsync(DeviceFrame.Json, timeout, ct);
+    EnsureOk("settings", await channel.ReceiveAsync(DeviceFrame.Json, timeout, ct));
     await channel.SendLineAsync(DeviceMessageSerializer.Serialize(new DeviceCommandMessage("connectap", mac)), ct);
-    return new DeviceResponse(await channel.ReceiveAsync(DeviceFrame.Json, timeout, ct));
+    string connectResponse = await channel.ReceiveAsync(DeviceFrame.Json, timeout, ct);
+    EnsureOk("connectap", connectResponse);
+    return new DeviceResponse(connectResponse);
+}
+
+// 실장비 응답 {"mac":"<mac>","respone":"OK"} (키 이름은 펌웨어 오타 그대로)
+private static void EnsureOk(string step, string raw)
+{
+    // ... JSON 파싱 실패, respone 없음, 값이 OK가 아니면
+    throw new DeviceProtocolException($"Unexpected {step} response: {raw}");
 }
 ```
 
+설정 JSON·`connectap` 응답이 `respone: OK`가 아니면 다음 단계로 가지 않고 예외로 끝낸다(설계 2절 "응답 불일치는 예외"). 독립 검토 지적으로 회귀 반영(2026-11-10).
+
 `apscan` 대기 시간은 `Device.ApScanTimeoutSeconds`(기본 15, 설계 12절 미확인 대응)로 둔다.
 
-- **검증**: 단위 테스트 — `:` 포함 SSID, 빈 목록, 형식 오류, 중복 SSID 최대 RSSI, 정렬, 후보 없음 예외; loopback으로 송신 순서(apscan → 설정 → connectap)·선택 프로필의 `ssid`/`pass` 확인
+- **검증**: 단위 테스트 — `:` 포함 SSID, 빈 목록, 형식 오류, 중복 SSID 최대 RSSI, 정렬, 후보 없음 예외; loopback으로 송신 순서(apscan → 설정 → connectap)·선택 프로필의 `ssid`/`pass` 확인; 설정 응답이 `OK`가 아니면 `connectap`을 보내지 않고 예외, `connectap` 응답이 `OK`가 아니거나 JSON이 아니면 예외
 - **선행 단위**: U4
 
 ### U6. PC Wi‑Fi (`HostWifi`)와 장치 AP 탐색

@@ -103,6 +103,48 @@ namespace Biz.Bizadm.PowerManager.DeviceConfig.Tests
         }
 
         [TestMethod]
+        public async Task ConnectAp_SettingsNotOk_ThrowsWithoutConnectAp()
+        {
+            await using MockDevice device = MockDevice.Start();
+            (TcpDeviceChannel channel, DeviceSession session) = await HandshakeAsync(device);
+            await using TcpDeviceChannel ownedChannel = channel;
+
+            Task<DeviceResponse> connect = session.ConnectApAsync(Settings(), new FixedSelector(0), CancellationToken.None);
+            await device.ReadLineAsync();
+            await device.SendAsync("{\"SCAN_AP_LIST\":{\"HomeAP:-40\"}}");
+            await device.ReadLineAsync();
+            await device.SendAsync("{\"mac\":\"aabbccddeeff\",\"respone\":\"FAIL\"}");
+
+            DeviceProtocolException ex = await Assert.ThrowsExactlyAsync<DeviceProtocolException>(() => connect);
+            Assert.Contains("settings", ex.Message);
+            // connectap을 보내지 않았으면 PC가 연결을 닫을 때까지 받은 줄이 없다
+            await ownedChannel.DisposeAsync();
+            await Assert.ThrowsExactlyAsync<IOException>(device.ReadLineAsync);
+        }
+
+        [TestMethod]
+        [DataRow("{\"mac\":\"aabbccddeeff\",\"respone\":\"FAIL\"}")]
+        [DataRow("{\"mac\":\"aabbccddeeff\"}")]
+        [DataRow("{not json}")]
+        public async Task ConnectAp_ConnectApNotOk_Throws(string response)
+        {
+            await using MockDevice device = MockDevice.Start();
+            (TcpDeviceChannel channel, DeviceSession session) = await HandshakeAsync(device);
+            await using TcpDeviceChannel ownedChannel = channel;
+
+            Task<DeviceResponse> connect = session.ConnectApAsync(Settings(), new FixedSelector(0), CancellationToken.None);
+            await device.ReadLineAsync();
+            await device.SendAsync("{\"SCAN_AP_LIST\":{\"HomeAP:-40\"}}");
+            await device.ReadLineAsync();
+            await device.SendAsync("{\"respone\":\"OK\"}");
+            await device.ReadLineAsync();
+            await device.SendAsync(response);
+
+            DeviceProtocolException ex = await Assert.ThrowsExactlyAsync<DeviceProtocolException>(() => connect);
+            Assert.Contains("connectap", ex.Message);
+        }
+
+        [TestMethod]
         public async Task ConnectAp_NoRegisteredWifi_ThrowsWithScannedList()
         {
             await using MockDevice device = MockDevice.Start();
