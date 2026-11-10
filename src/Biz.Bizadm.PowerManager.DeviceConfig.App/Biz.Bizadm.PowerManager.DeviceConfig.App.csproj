@@ -4,6 +4,16 @@
     <OutputType>Exe</OutputType>
   </PropertyGroup>
 
+  <!-- PC Wi-Fi 구현: RuntimeIdentifier의 OS, RID가 없으면 빌드 호스트 OS의 Runtime 프로젝트 하나만 참조한다 -->
+  <PropertyGroup>
+    <HostWifiOs Condition="$(RuntimeIdentifier.StartsWith('win'))">win</HostWifiOs>
+    <HostWifiOs Condition="$(RuntimeIdentifier.StartsWith('linux'))">linux</HostWifiOs>
+    <HostWifiOs Condition="$(RuntimeIdentifier.StartsWith('osx'))">osx</HostWifiOs>
+    <HostWifiOs Condition="'$(HostWifiOs)' == '' And $([MSBuild]::IsOSPlatform('Windows'))">win</HostWifiOs>
+    <HostWifiOs Condition="'$(HostWifiOs)' == '' And $([MSBuild]::IsOSPlatform('Linux'))">linux</HostWifiOs>
+    <HostWifiOs Condition="'$(HostWifiOs)' == '' And $([MSBuild]::IsOSPlatform('OSX'))">osx</HostWifiOs>
+  </PropertyGroup>
+
   <ItemGroup>
     <PackageReference Include="Biz.Bizadm.KMS" />
     <PackageReference Include="Biz.Bizadm.KMS.Credentials" />
@@ -19,6 +29,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Biz.Bizadm.PowerManager.DeviceConfig\Biz.Bizadm.PowerManager.DeviceConfig.csproj" />
+    <ProjectReference Include="..\Biz.Bizadm.PowerManager.DeviceConfig.HostWifi.Runtime.$(HostWifiOs)\Biz.Bizadm.PowerManager.DeviceConfig.HostWifi.Runtime.$(HostWifiOs).csproj" />
   </ItemGroup>
 
 </Project>

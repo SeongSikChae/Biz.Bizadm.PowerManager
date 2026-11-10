@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <AssemblyName>Biz.Bizadm.PowerManager.DeviceConfig.HostWifi.Runtime</AssemblyName>
+    <RootNamespace>Biz.Bizadm.PowerManager.DeviceConfig.HostWifi</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Biz.Bizadm.PowerManager.DeviceConfig\Biz.Bizadm.PowerManager.DeviceConfig.csproj" />
+  </ItemGroup>
+
+</Project>
