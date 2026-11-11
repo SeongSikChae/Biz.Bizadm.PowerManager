@@ -33,7 +33,9 @@ tests/
 - 실행: `Biz.Bizadm.PowerManager.DeviceConfig.Mcp --config <yaml> --log <dir>`. MCP 클라이언트 설정의 `command`/`args`로 등록한다.
 - **경로 전제**: MCP 클라이언트가 서버를 띄우는 작업 폴더는 정해져 있지 않다. `--config`, `--log`, 설정의 `ContentRootPath`는 **절대 경로라고 가정**하고 그대로 쓴다(별도 변환·검사 없음). 상대 경로를 쓰면 프로세스 작업 폴더 기준이 되어 DEK 파일·로그 위치가 달라질 수 있다는 점을 등록 안내에 적는다.
 - 기동 순서는 App과 같다: 인수 파싱(실패 1) → YAML 읽기·검증(실패 2) → KMS 처리·설정 재기록(실패 2) → Host 생성 → `host.RunAsync()`(stdin 종료 시 정상 종료 0, 예외 3). stdin 종료 시 SDK가 Host를 멈추는지는 구현 단계에서 실측으로 확정한다.
+  - 구현 결과(U2): stdin 종료 시 SDK가 Host를 정지함을 실측했다. `host.RunAsync()`는 끝날 때 Host를 dispose해 기동 실패 로그를 남길 수 없으므로 `StartAsync` + `WaitForShutdownAsync`를 쓰고 dispose는 `using`에 맡긴다(개발 문서 U2).
 - **실행 중 종료**: `run_device_commands` 실행 중 stdin이 닫히면 프로세스가 Runner의 복구(`finally`) 전에 끝날 수 있다. SDK가 진행 중인 tool을 기다리는지 U5에서 실측하고, 기다리지 않으면 `DeviceConfigService`를 `IHostedService`로도 등록해 `StopAsync`에서 진행 중인 호출(세마포어)이 끝날 때까지 기다린다.
+  - 실측 결과(U5): stdin이 닫혀도 SDK가 진행 중인 tool이 끝날 때까지 기다린 뒤 Host를 정지해, Runner 복구가 끝난 다음 종료했다(3회, 약 20초 대기까지 확인). 따라서 `IHostedService` 종료 대기는 추가하지 않았다. 30초를 넘는 대기와 클라이언트의 강제 종료는 확인하지 않았다(개발 문서 U5).
 - `Host.CreateApplicationBuilder` + `AddMcpServer().WithStdioServerTransport().WithTools<DeviceConfigTools>()`.
 - **stdout은 MCP 프로토콜 전용**이다. 모든 출력은 stderr·파일로 보낸다.
   - Serilog Console sink는 `standardErrorFromLevel: Verbose`로 전부 stderr.

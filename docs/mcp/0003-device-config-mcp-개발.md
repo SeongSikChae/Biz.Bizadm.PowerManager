@@ -400,8 +400,8 @@ public async Task Stdio_ListsFourTools_WithAnnotations()
 
 - `Stdio_ListWifiProfiles_ReturnsEmptySsids`: `structuredContent`가 `{ssids:[]}`. (`outputSchema`는 `Stdio_ListsFourTools_WithAnnotations`에서 4개 tool 모두 확인)
 - `Stdio_ScanUnknownAdapter_IsError`: `scan_device_aps("nope")` → `isError` true, 텍스트에 원인이 포함됨. SDK가 `An error occurred invoking '…': <원인>` 형식으로 감쌀 수 있으므로 "`An error occurred invoking 'scan_device_aps'.`(원인 없는 일반 문구)와 같지 않음"으로 단언한다. 원인 문구는 환경(`Adapter not found`, WLAN 서비스 오류, `not implemented`)마다 달라 특정 문구는 단언하지 않는다.
-- 실행 중 stdin 종료(**수동 실측**, 실장비 필요): 장치 AP 접속이 **성공한 뒤** 오래 걸리는 상태에서 클라이언트를 종료해야 한다. 존재하지 않는 장치 AP로는 접속 전에 실패해 복구 자체가 없으므로 판단 근거가 될 수 없다. 방법: 강제 종료와 구분하기 위해 SDK 클라이언트 대신 `Process`로 서버를 띄우는 작은 하네스를 쓴다(initialize → `tools/call run_device_commands [Reboot]` JSON-RPC를 직접 씀). 실장비에서 `Reboot`(응답 없이 `TimeoutSeconds`까지 대기) 또는 `TimeoutSeconds`를 크게 한 설정으로 호출 → 로그에 `Connected to device AP`가 찍힌 뒤 `StandardInput.Close()`만 한다(프로세스 kill 금지) → 기록: stdin 닫은 시각~프로세스 종료 시간, `PC Wi-Fi restored`·OCE 로그 유무, `netsh wlan show interfaces`의 실제 SSID. 3회 반복한다. 로그 유실과 구분하기 위해 Host dispose로 Serilog가 flush되는지(종료 직전 로그가 파일에 남는지) 먼저 확인한다. 남지 않으면 설계 2절대로 `DeviceConfigService`를 `IHostedService`로 등록해 `StopAsync`에서 세마포어를 획득·해제하도록 U4에 추가하고 다시 확인한다. 이때 `HostOptions.ShutdownTimeout`(기본 30초)은 최악 실행 시간(`ApConnectTimeoutSeconds` + 명령 수 × `TimeoutSeconds`)보다 짧을 수 있고, 클라이언트도 일정 시간 뒤 강제 종료할 수 있으므로, 대기 상한과 강제 종료 시 복구가 보장되지 않는다는 점을 결과와 함께 기록한다.
-  - U5 결과(2026-11-11, `DWD-LS120_501f96` 2회 + `DWD-LS120_1055b3` 1회, `TimeoutSeconds` 40, `Reboot`): 3회 모두 stdin이 닫히면 `transport completed reading messages`가 찍힌 뒤에도 SDK가 진행 중인 `run_device_commands`가 끝날 때까지 기다렸다. stdin은 1·3회차는 `StandardInput.Close()`, 2회차는 하네스 스크립트 오류로 하네스 프로세스가 끝나며 파이프가 닫혔다(어느 경우도 서버 kill 아님). Reboot 무응답 → `treated as sent` → `PC Wi-Fi restored` → `run_device_commands completed` → Host 종료 순서이며, stdin 종료부터 Host 종료 로그까지 1회차 20.2초, 2회차 20.0초, 3회차 17.8초(3회차만 프로세스 종료 코드 0 기록, 1·2회차는 미기록)였다. 종료 직전 로그(`shut down`)까지 파일에 남아 Serilog flush도 확인했다. 대기 중 OCE 로그가 없어 SDK가 tool 토큰을 취소하지 않고 완료를 기다린 것으로 보며, 따라서 `IHostedService` 종료 대기는 추가하지 않는다. 확인된 대기 범위는 약 20초까지다: 3회 모두 `TimeoutSeconds`(40초)가 아니라 송신 후 약 19~22초에 장치가 연결을 끊어 끝났다. 30초를 넘는 대기(`HostOptions.ShutdownTimeout` 기본 30초 초과, 최악 실행 시간 `ApConnectTimeoutSeconds` + 명령 수 × `TimeoutSeconds`)는 실측하지 않았다. 3회 모두 PC Wi‑Fi 연결 해제 상태에서 시작해 "이전 SSID로 재연결" 경로는 이 실측에서 보지 않았다(cli U8에서 확인). 클라이언트가 프로세스를 강제 종료하면 복구는 보장되지 않는다. 1회차는 대상 장치를 사용자에게 확인받지 않고 신호가 가장 센 장치를 자동 선택해 실행한 것으로, 이후 실장비 명령은 대상 SSID를 확인받은 뒤에만 보낸다.
+- 실행 중 stdin 종료(**수동 실측**, 실장비 필요): 장치 AP 접속이 **성공한 뒤** 오래 걸리는 상태에서 클라이언트를 종료해야 한다. 존재하지 않는 장치 AP로는 접속 전에 실패해 복구 자체가 없으므로 판단 근거가 될 수 없다. 방법: 강제 종료와 구분하기 위해 SDK 클라이언트 대신 `Process`로 서버를 띄우는 작은 하네스를 쓴다(initialize → `tools/call run_device_commands [Reboot]` JSON-RPC를 직접 씀). 실장비에서 `Reboot`(응답 없이 `TimeoutSeconds`까지 대기) 또는 `TimeoutSeconds`를 크게 한 설정으로 호출 → 로그에 `Connected to device AP`가 찍힌 뒤 `StandardInput.Close()`만 한다(프로세스 kill 금지) → 기록: stdin 닫은 시각~프로세스 종료 시간, `PC Wi-Fi restored`·OCE 로그 유무, `netsh wlan show interfaces`의 실제 SSID. 3회 반복한다. 로그 유실과 구분하기 위해 Host dispose로 Serilog가 flush되는지(종료 직전 로그가 파일에 남는지) 먼저 확인한다. 남지 않으면 설계 2절대로 `DeviceConfigService`를 `IHostedService`로 등록해 `StopAsync`에서 세마포어를 획득·해제하도록 U4에 추가하고 다시 확인한다. 이때 `HostOptions.ShutdownTimeout`(기본 30초)은 최악 실행 시간(`ApConnectTimeoutSeconds` + 4 + (일반 명령 수 × 3 + `ConnectAp` 수 × 5) × `TimeoutSeconds`)보다 짧을 수 있고, 클라이언트도 일정 시간 뒤 강제 종료할 수 있으므로, 대기 상한과 강제 종료 시 복구가 보장되지 않는다는 점을 결과와 함께 기록한다.
+  - U5 결과(2026-11-11, `DWD-LS120_501f96` 2회 + `DWD-LS120_1055b3` 1회, `TimeoutSeconds` 40, `Reboot`): 3회 모두 stdin이 닫히면 `transport completed reading messages`가 찍힌 뒤에도 SDK가 진행 중인 `run_device_commands`가 끝날 때까지 기다렸다. stdin은 1·3회차는 `StandardInput.Close()`, 2회차는 하네스 스크립트 오류로 하네스 프로세스가 끝나며 파이프가 닫혔다(어느 경우도 서버 kill 아님). Reboot 무응답 → `treated as sent` → `PC Wi-Fi restored` → `run_device_commands completed` → Host 종료 순서이며, stdin 종료부터 Host 종료 로그까지 1회차 20.2초, 2회차 20.0초, 3회차 17.8초(3회차만 프로세스 종료 코드 0 기록, 1·2회차는 미기록)였다. 종료 직전 로그(`shut down`)까지 파일에 남아 Serilog flush도 확인했다. 대기 중 OCE 로그가 없어 SDK가 tool 토큰을 취소하지 않고 완료를 기다린 것으로 보며, 따라서 `IHostedService` 종료 대기는 추가하지 않는다. 확인된 대기 범위는 약 20초까지다: 3회 모두 `TimeoutSeconds`(40초)가 아니라 송신 후 약 19~22초에 장치가 연결을 끊어 끝났다. 30초를 넘는 대기(`HostOptions.ShutdownTimeout` 기본 30초 초과, 최악 실행 시간 `ApConnectTimeoutSeconds` + 4 + (일반 명령 수 × 3 + `ConnectAp` 수 × 5) × `TimeoutSeconds`)는 실측하지 않았다. 3회 모두 PC Wi‑Fi 연결 해제 상태에서 시작해 "이전 SSID로 재연결" 경로는 이 실측에서 보지 않았다(cli U8에서 확인). 클라이언트가 프로세스를 강제 종료하면 복구는 보장되지 않는다. 1회차는 대상 장치를 사용자에게 확인받지 않고 신호가 가장 센 장치를 자동 선택해 실행한 것으로, 이후 실장비 명령은 대상 SSID를 확인받은 뒤에만 보낸다.
 - `Exe_InvalidConfig_ExitCode2`: `System.Diagnostics.Process`로 직접 실행(OsKms 없는 설정) → `ExitCode == 2`, stderr에 `Configuration error`, stdout 빈 문자열.
 
 **검증**: `dotnet test --solution` 전체 통과, `dotnet build -warnaserror` 경고 0.
@@ -412,6 +412,33 @@ public async Task Stdio_ListsFourTools_WithAnnotations()
 
 ## 완료 후
 
-- 등록 안내(이 문서에 기록): Claude Code 예시 `claude mcp add device-config -- <절대 경로>\Biz.Bizadm.PowerManager.DeviceConfig.Mcp.exe --config <절대 경로>.yaml --log <절대 경로>`. 긴 명령 실행 시 `MCP_TOOL_TIMEOUT`(ms)을 늘린다. 상대 경로는 클라이언트 작업 폴더 기준이 되므로 쓰지 않는다. 한 번에 하나의 클라이언트 세션에서만 쓴다(다중 프로세스 비범위).
-- 수동: `list_wifi_adapters`, `scan_device_aps`, 실장비가 있으면 `run_device_commands [Measurement]`.
-- 독립 에이전트 완료 검토(vibe-harness 10절) → 이슈 #7 종결.
+### 등록 안내
+
+빌드 출력(또는 `dotnet publish`)의 `Biz.Bizadm.PowerManager.DeviceConfig.Mcp.exe`를 stdio MCP 서버로 등록한다. Claude Code 예시:
+
+```powershell
+claude mcp add device-config -- D:\Tools\DeviceConfigMcp\Biz.Bizadm.PowerManager.DeviceConfig.Mcp.exe --config D:\Tools\DeviceConfigMcp\config.yaml --log D:\Tools\DeviceConfigMcp\log
+```
+
+- `--config`, `--log`, 설정의 `ContentRootPath`는 **절대 경로**로 쓴다. 상대 경로는 클라이언트가 서버를 띄우는 작업 폴더 기준이 되어 DEK 파일·로그 위치가 달라진다.
+- 설정 형식은 설계 4절. `WifiProfiles[].Pass`는 첫 기동 때 OsKms로 암호화(`DEKENC:`)되어 설정 파일에 다시 기록되므로, 서버 계정이 설정 파일에 쓸 수 있어야 한다.
+- `run_device_commands`는 오래 걸릴 수 있다. `TimeoutSeconds`는 명령마다 한 번이 아니라 단계마다 따로 걸린다(TCP 연결, `hello` 응답, 명령 응답: 일반 명령 최대 3번, `ConnectAp`는 연결·`hello`·`apscan`·설정 JSON·`connectap`으로 최대 5번). Windows는 장치 AP 스캔에 4초를 더 기다린다. 응답이 없는 `Reboot`·`TestFactoryReset`은 보통 대기 시간을 다 쓰거나 장치가 연결을 끊을 때까지 기다린다. 최악 실행 시간은 `ApConnectTimeoutSeconds` + 4 + (일반 명령 수 × 3 + `ConnectAp` 수 × 5) × `TimeoutSeconds`(초)다.
+- Claude Code는 `MCP_TOOL_TIMEOUT`(ms)을 위 최악 실행 시간보다 크게 잡는다. 환경 변수는 `claude`를 띄우기 **전에** 그 셸에서 설정해야 적용된다(예: `$env:MCP_TOOL_TIMEOUT = "300000"` 후 `claude` 실행). 매번 설정하지 않으려면 Claude Code settings.json의 `env`에 `"MCP_TOOL_TIMEOUT": "300000"`을 넣는다. 300000ms는 기본값(`TimeoutSeconds` 10, `ApConnectTimeoutSeconds` 30)에서 `ConnectAp` 1개 + 일반 명령 7개까지 덮는다. 시간 초과가 나도 서버는 실행을 끝까지 마치고 PC Wi‑Fi를 복구한다(클라이언트만 응답을 받지 못함).
+- 실행 중에는 PC Wi‑Fi가 장치 AP로 바뀌므로 그동안 이 PC의 네트워크가 끊긴다. 응답 직후 원래 Wi‑Fi로 재연결 중일 수 있다.
+- 한 번에 하나의 클라이언트 세션에서만 쓴다(여러 프로세스가 같은 어댑터를 쓰는 경우는 직렬화하지 않음).
+- 주변에 장치가 여러 대일 수 있으므로 `run_device_commands`의 `deviceApSsid`는 대상 장치를 확인한 뒤 지정한다. 상태 변경 명령(`ConnectAp`, `Reboot`, `FactoryReset`, `TestFactoryReset`, `OnCmd`, `OffCmd`)은 특히 주의한다.
+
+### 수동 확인 결과
+
+2026-11-11 11:24, MCP SDK 클라이언트(`ModelContextProtocol` 2.4.0 `McpClient` + `StdioClientTransport`)로 빌드한 exe를 실행했다(Claude Code 등록은 하지 않음: 사용자 설정을 바꾸지 않기 위해 SDK 클라이언트로 대신 확인).
+
+- `tools/list`: tool 4개.
+- `list_wifi_adapters`: Intel Wi‑Fi 6 AX201 어댑터 1개.
+- `scan_device_aps`: `DWD-` 장치 AP 5개.
+- `run_device_commands [Measurement]` → 사용자가 지정한 `DWD-LS120_501f96`: `success: true`, `MEASUREMENT_W:0.0#`. 끝난 뒤 PC Wi‑Fi는 시작할 때와 같은 연결 해제 상태, 남은 서버 프로세스 없음.
+
+### 남은 확인(미검증 범위)
+
+- 30초를 넘는 실행 도중 클라이언트가 stdin을 닫는 경우(U5 실측은 약 20초까지).
+- MCP 경로에서 "이전 SSID로 재연결"(실측이 모두 연결 해제 상태에서 시작, cli U8에서는 확인).
+- Claude Code에 실제로 등록해 쓰는 경우.
