@@ -75,6 +75,30 @@ namespace Biz.Bizadm.PowerManager.DeviceConfig.Mcp.Tests
                 ? required.EnumerateArray().Select(e => e.GetString()!).ToArray()
                 : [];
 
+        private static string[] Required(JsonElement schema) =>
+            schema.TryGetProperty("required", out JsonElement required)
+                ? required.EnumerateArray().Select(e => e.GetString()!).ToArray()
+                : [];
+
+        /// <summary>null일 수 있는 출력 필드(미연결 어댑터의 currentSsid, 성공 시 error)는 required가 아니어야 한다(#8).</summary>
+        [TestMethod]
+        public async Task Stdio_OutputSchema_NullableFieldsAreOptional()
+        {
+            await using McpClient client = await StartClientAsync();
+            IList<McpClientTool> tools = await client.ListToolsAsync(cancellationToken: TestContext.CancellationToken);
+
+            JsonElement adapters = tools.Single(t => t.Name == "list_wifi_adapters").ProtocolTool.OutputSchema!.Value;
+            JsonElement adapterItem = adapters.GetProperty("properties").GetProperty("adapters").GetProperty("items");
+            Assert.IsTrue(adapterItem.GetProperty("properties").TryGetProperty("currentSsid", out _));
+            CollectionAssert.DoesNotContain(Required(adapterItem), "currentSsid");
+            CollectionAssert.IsSubsetOf(new[] { "id", "name" }, Required(adapterItem));
+
+            JsonElement run = tools.Single(t => t.Name == "run_device_commands").ProtocolTool.OutputSchema!.Value;
+            Assert.IsTrue(run.GetProperty("properties").TryGetProperty("error", out _));
+            CollectionAssert.DoesNotContain(Required(run), "error");
+            CollectionAssert.IsSubsetOf(new[] { "success", "results" }, Required(run));
+        }
+
         [TestMethod]
         public async Task Stdio_ListsFourTools_WithAnnotations()
         {

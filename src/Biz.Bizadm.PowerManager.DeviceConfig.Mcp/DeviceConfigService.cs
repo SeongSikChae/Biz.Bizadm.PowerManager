@@ -15,7 +15,8 @@ namespace Biz.Bizadm.PowerManager.DeviceConfig.Mcp
         /// <summary>설정 파일에서 만든 기본 옵션(Commands는 비어 있음)과 복호화한 Wi-Fi 프로필.</summary>
         public sealed record ServiceSettings(DeviceConfigOptions BaseOptions, IReadOnlyList<WifiProfile> WifiProfiles);
 
-        public sealed record AdapterInfo(string Id, string Name, string? CurrentSsid);
+        /// <summary>CurrentSsid는 미연결이면 null이다. 기본값으로 출력 schema의 required에서 뺀다(#8).</summary>
+        public sealed record AdapterInfo(string Id, string Name, string? CurrentSsid = null);
 
         public sealed record AdaptersResult(IReadOnlyList<AdapterInfo> Adapters);
 
@@ -25,7 +26,8 @@ namespace Biz.Bizadm.PowerManager.DeviceConfig.Mcp
 
         public sealed record CommandResult(string Command, string Response);
 
-        public sealed record RunResult(bool Success, IReadOnlyList<CommandResult> Results, string? Error);
+        /// <summary>Error는 성공이면 null이다. 기본값으로 출력 schema의 required에서 뺀다(#8).</summary>
+        public sealed record RunResult(bool Success, IReadOnlyList<CommandResult> Results, string? Error = null);
 
         private readonly SemaphoreSlim gate = new(1, 1);
 
