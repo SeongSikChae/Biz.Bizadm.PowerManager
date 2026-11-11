@@ -135,14 +135,17 @@ internal sealed class McpConfiguration : IValidatableConfiguration
 // Program.RunAsync: App과 같은 순서. Console.WriteLine → Console.Error.WriteLine. 경로는 변환하지 않는다(절대 경로 가정)
 using (host)
 {
+    // host.RunAsync()는 finally에서 Host를 dispose해 catch에서 로그를 남길 수 없으므로 쓰지 않는다(U2 검토 반영)
+    ILogger<Program> logger = host.Services.GetRequiredService<ILogger<Program>>();
     try
     {
-        await host.RunAsync(); // stdin 종료 → SDK가 Host 정지(실측 확인)
+        await host.StartAsync();
+        await host.WaitForShutdownAsync(); // stdin 종료 → SDK가 Host 정지(실측 확인), 정지 후 StopAsync까지 호출
         return ExitCode.Success;
     }
     catch (Exception ex)
     {
-        host.Services.GetRequiredService<ILogger<Program>>().LogCritical(ex, "Host terminated unexpectedly");
+        logger.LogCritical(ex, "Host terminated unexpectedly");
         return ExitCode.RuntimeError;
     }
 }
@@ -166,7 +169,7 @@ builder.Services.AddMcpServer().WithStdioServerTransport(); // tool 등록은 U4
 **검증**
 - 패키지 추가 전 `ModelContextProtocol` 2.4.0의 존재·취약·Deprecated와 의존성 버전을 확인한다. `Microsoft.Extensions.*`를 10.0.14보다 높게 요구해 NU1605가 나면 CPM의 해당 버전을 요구 버전의 최신 패치로 올린다(사용자 확인 후).
 - `dotnet build -warnaserror` 통과.
-- `McpConfigurationTests`: `Validate_NoWifiProfilesNoSettings_Ok`, `Validate_DuplicateSsid_Throws`, `Validate_SettingsPortOutOfRange_Throws`, `Validate_OsKmsMissing_Throws`, `ToOptions_CopiesDeviceAndSettings`.
+- `McpConfigurationTests`: `Validate_NoWifiProfilesNoSettings_Ok`, `Validate_WifiProfilesWithoutSettings_Ok`, `Validate_DuplicateSsid_Throws`, `Validate_SettingsPortOutOfRange_Throws`, `Validate_OsKmsMissing_Throws`, `ToOptions_CopiesDeviceAndSettings`(`Lati`·`Long`은 기본값이 아닌 값으로 확인).
 - exe 실측(임시 폴더, 절대 경로): 인수 없음 → 종료 코드 1. 없는 설정 파일 → 2(stderr `Configuration error`). WifiProfiles 없는 정상 설정 + stdin 즉시 EOF(`Process`로 실행 후 stdin 닫기) → 종료 코드 0, stdout 0바이트, `ContentRootPath`에 DEK 파일이 생기지 않음. stdin EOF로 종료되지 않으면 원인을 기록하고 이 단위에서 처리 방식을 정한다.
 - KMS 수동 1회: 평문 `Pass` 설정(테스트 전용 `CredentialService`)으로 기동 → 파일에 `DEKENC:`·`Salt` 기록, stdout 0바이트. 끝나면 테스트 자격 증명·DEK 파일을 지운다.
 
