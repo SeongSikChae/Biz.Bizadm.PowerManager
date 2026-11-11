@@ -1,8 +1,12 @@
 using Biz.Bizadm.PowerManager.DeviceConfig.HostWifi;
+using Biz.Bizadm.PowerManager.DeviceConfig.Protocol;
 using Biz.Bizadm.PowerManager.DeviceConfig.Transport;
 using Biz.Bizadm.PowerManager.DeviceConfig.Wifi;
 using Microsoft.Extensions.Logging;
 using ModelContextProtocol;
+using System.ComponentModel;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace Biz.Bizadm.PowerManager.DeviceConfig.Mcp
 {
@@ -23,6 +27,51 @@ namespace Biz.Bizadm.PowerManager.DeviceConfig.Mcp
         public sealed record DeviceApsResult(IReadOnlyList<WifiNetwork> DeviceAps);
 
         public sealed record WifiProfilesResult(IReadOnlyList<string> Ssids);
+
+        /// <summary>
+        /// run_device_commands settings 인자(#9). null 필드는 설정 파일 Settings 값(없으면 SettingsSection 기본값)을 쓴다.
+        /// 장치 JSON의 snake_case(user_id 등)로 보내면 덮어쓰기가 빠진 채 실행되므로 모르는 키는 거부한다.
+        /// 바인딩 단계에서 거부하면 SDK가 원인을 가리므로(실측) UnknownKeys로 받아 RunAsync에서 error로 돌려준다.
+        /// </summary>
+        public sealed record SettingsOverride
+        {
+            /// <summary>정의되지 않은 키. 입력 스키마에는 나오지 않는다.</summary>
+            [JsonExtensionData]
+            public Dictionary<string, JsonElement>? UnknownKeys { get; init; }
+
+            [Description("API server address (string)")]
+            public string? ApiServerAddr { get; init; }
+
+            [Description("API server port (integer 1-65535)")]
+            public int? ApiServerPort { get; init; }
+
+            [Description("MQTT server address (string)")]
+            public string? ServerAddr { get; init; }
+
+            [Description("MQTT server port (integer 1-65535)")]
+            public int? ServerPort { get; init; }
+
+            [Description("Use SSL (boolean; sent as yes/no)")]
+            public bool? SslSupport { get; init; }
+
+            [Description("User id (string)")]
+            public string? UserId { get; init; }
+
+            [Description("Company (string)")]
+            public string? Company { get; init; }
+
+            [Description("Model (string)")]
+            public string? Model { get; init; }
+
+            [Description("Latitude (string, e.g. \"37.5\")")]
+            public string? Lati { get; init; }
+
+            [Description("Longitude (string, e.g. \"127.0\")")]
+            public string? Long { get; init; }
+
+            [Description("MQTT topic (string)")]
+            public string? Topic { get; init; }
+        }
 
         public sealed record CommandResult(string Command, string Response);
 
@@ -56,24 +105,28 @@ namespace Biz.Bizadm.PowerManager.DeviceConfig.Mcp
         /// 취소(OperationCanceledException)는 그대로 전파한다.
         /// </summary>
         public Task<RunResult> RunAsync(string adapterId, string deviceApSsid, IReadOnlyList<string> commands, string? wifiSsid,
-            IProgress<ProgressNotificationValue>? progress, CancellationToken ct) => LockedAsync(async () =>
+            SettingsOverride? settingsOverride, IProgress<ProgressNotificationValue>? progress, CancellationToken ct) => LockedAsync(async () =>
         {
             List<CommandResult> results = [];
             try
             {
                 IReadOnlyList<DeviceCommand> parsed = ParseCommands(commands);
+                if (settingsOverride?.UnknownKeys is { Count: > 0 } unknown)
+                    throw new ArgumentException($"Unknown settings keys: {string.Join(", ", unknown.Keys)} (use camelCase names such as userId, apiServerPort)");
+                DeviceSettings? deviceSettings = settings.BaseOptions.Settings;
                 if (parsed.Contains(DeviceCommand.ConnectAp))
                 {
-                    // Wi-Fi 접속 전에 검사한다(설계 5.3절)
-                    if (settings.BaseOptions.Settings is null || settings.WifiProfiles.Count == 0)
+                    // Wi-Fi 접속 전에 검사한다(설계 5.3절). settings 인자는 ConnectAp에서만 쓴다(#9)
+                    if ((settings.BaseOptions.Settings is null && settingsOverride is null) || settings.WifiProfiles.Count == 0)
                         throw new ArgumentException("ConnectAp requires Settings and WifiProfiles in the config file");
+                    deviceSettings = ResolveSettings(settings.BaseOptions.Settings, settingsOverride);
                     if (wifiSsid is null || !settings.WifiProfiles.Any(p => p.Ssid == wifiSsid))
                         throw new ArgumentException($"wifiSsid must be one of list_wifi_profiles for ConnectAp: {wifiSsid}");
                 }
 
                 progress?.Report(new ProgressNotificationValue { Progress = 0, Total = parsed.Count, Message = "Connecting to device AP" });
                 DeviceConfigRunner runner = new(hostWifi, new ParameterDeviceConfigSelector(adapterId, deviceApSsid, wifiSsid),
-                    settings.BaseOptions with { Commands = parsed }, logger);
+                    settings.BaseOptions with { Commands = parsed, Settings = deviceSettings }, logger);
                 await runner.RunAsync(r =>
                 {
                     results.Add(new CommandResult(r.Command.ToString(), r.Response));
@@ -87,6 +140,54 @@ namespace Biz.Bizadm.PowerManager.DeviceConfig.Mcp
                 return new RunResult(false, results, $"{ex.GetType().Name}: {ex.Message}");
             }
         }, ct);
+
+        /// <summary>필드 단위 병합(#9): 인자 → 설정 파일 Settings → SettingsSection 기본값(선택 필드만). 둘 다 null인 경우는 호출 전에 거른다.</summary>
+        internal static DeviceSettings ResolveSettings(DeviceSettings? file, SettingsOverride? o)
+        {
+            if (o is null)
+                return file!;
+            SettingsSection defaults = new();
+            string? apiServerAddr = o.ApiServerAddr ?? file?.ApiServerAddr;
+            int? apiServerPort = o.ApiServerPort ?? file?.ApiServerPort;
+            string? serverAddr = o.ServerAddr ?? file?.ServerAddr;
+            int? serverPort = o.ServerPort ?? file?.ServerPort;
+            string? userId = o.UserId ?? file?.UserId;
+
+            if (apiServerAddr is null || apiServerPort is not int apiPort || serverAddr is null || serverPort is not int serverPortValue || userId is null)
+            {
+                List<string> missing = [];
+                if (apiServerAddr is null) missing.Add("apiServerAddr");
+                if (apiServerPort is null) missing.Add("apiServerPort");
+                if (serverAddr is null) missing.Add("serverAddr");
+                if (serverPort is null) missing.Add("serverPort");
+                if (userId is null) missing.Add("userId");
+                throw new ArgumentException($"ConnectAp requires settings: missing {string.Join(", ", missing)} (set Settings in the config file or the settings argument)");
+            }
+            ValidatePort("settings.apiServerPort", apiPort);
+            ValidatePort("settings.serverPort", serverPortValue);
+
+            return new DeviceSettings
+            {
+                ApiServerAddr = apiServerAddr,
+                ApiServerPort = apiPort,
+                ServerAddr = serverAddr,
+                ServerPort = serverPortValue,
+                UserId = userId,
+                SslSupport = o.SslSupport ?? file?.SslSupport ?? defaults.SslSupport,
+                Company = o.Company ?? file?.Company ?? defaults.Company,
+                Model = o.Model ?? file?.Model ?? defaults.Model,
+                Lati = o.Lati ?? file?.Lati ?? defaults.Lati,
+                Long = o.Long ?? file?.Long ?? defaults.Long,
+                Topic = o.Topic ?? file?.Topic ?? defaults.Topic,
+            };
+        }
+
+        /// <summary>McpConfiguration과 같은 메시지 형식.</summary>
+        private static void ValidatePort(string name, int port)
+        {
+            if (port is < 1 or > 65535)
+                throw new ArgumentException($"{name} out of range: {port}");
+        }
 
         /// <summary>열거형 이름과 정확히 일치만 허용한다(Enum.TryParse는 "1"·"OnCmd,OffCmd"를 통과시킴).</summary>
         private static IReadOnlyList<DeviceCommand> ParseCommands(IReadOnlyList<string> commands)

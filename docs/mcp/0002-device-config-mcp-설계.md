@@ -73,7 +73,7 @@ Device:                   # App과 같음 (ApPrefix, Host, Port, TimeoutSeconds,
 WifiProfiles:             # 선택. ConnectAp 실행 시 필요
   - Ssid: MyRouter
     Pass: plain           # 기동 시 DEKENC:... 로 암호화해 다시 기록
-Settings:                 # 선택. ConnectAp 실행 시 필요 (항목은 App과 같음)
+Settings:                 # 선택. ConnectAp 기본값 (항목은 App과 같음). run_device_commands의 settings 인자가 필드 단위로 덮어쓴다(#9)
 ```
 
 - 검증: OsKms·Device 검사는 App과 같다. `WifiProfiles`가 있으면 항목 필수·SSID 중복 검사, `Settings`가 있으면 필수·포트 범위 검사. 둘 다 **기동 시 필수는 아니다**(조회·일반 명령만 쓸 수 있게).
@@ -93,7 +93,7 @@ Settings:                 # 선택. ConnectAp 실행 시 필요 (항목은 App�
 | `list_wifi_adapters` | 없음 | `{adapters:[{id, name, currentSsid}]}` | readOnly |
 | `scan_device_aps` | `adapterId` | `{deviceAps:[{ssid, signal}]}` (ApPrefix로 시작, 신호 내림차순) | readOnly |
 | `list_wifi_profiles` | 없음 | `{ssids:[…]}` | readOnly |
-| `run_device_commands` | `adapterId`, `deviceApSsid`, `commands[]`, `wifiSsid`(선택, 기본 null) | 5.4 | destructive, openWorld |
+| `run_device_commands` | `adapterId`, `deviceApSsid`, `commands[]`, `wifiSsid`(선택, 기본 null), `settings`(선택, 기본 null, #9) | 5.4 | destructive, openWorld |
 
 ### 5.1 PC Wi‑Fi 미구현 OS
 
@@ -110,7 +110,7 @@ Settings:                 # 선택. ConnectAp 실행 시 필요 (항목은 App�
 ### 5.3 실행 전 검사
 
 - `commands`가 비면 오류.
-- `commands`에 `ConnectAp`가 있으면 Wi‑Fi 접속 전에 검사한다: 설정에 `Settings`가 있고 `WifiProfiles`가 비지 않았으며, `wifiSsid`가 있고 `WifiProfiles`에 등록된 SSID여야 한다. 아니면 오류.
+- `commands`에 `ConnectAp`가 있으면 Wi‑Fi 접속 전에 검사한다: `WifiProfiles`가 비지 않았고, 설정 파일 `Settings`와 `settings` 인자를 필드 단위로 합친 값에 필수 필드가 모두 있으며(포트 범위 포함), `wifiSsid`가 `WifiProfiles`에 등록된 SSID여야 한다. 아니면 오류. `settings`의 모르는 키(`user_id` 등)는 ConnectAp 여부와 관계없이 오류로 돌려주고, ConnectAp가 없으면 `settings`의 값 검사는 하지 않는다. 상세는 [0005](0005-device-config-mcp-settings-override-개발.md).
 - 명령 이름은 `DeviceCommand` 열거형 이름과 **정확히 일치**(대소문자 구분)해야 한다. `Enum.TryParse`는 숫자(`"1"`)·쉼표 조합(`"OnCmd,OffCmd"`)을 통과시키므로 쓰지 않고 `Enum.GetNames`와 비교한다. 모르는 이름이면 오류.
 
 ### 5.4 `run_device_commands` 결과·진행 알림

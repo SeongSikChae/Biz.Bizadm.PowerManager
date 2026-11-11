@@ -119,9 +119,14 @@ namespace Biz.Bizadm.PowerManager.DeviceConfig.Mcp.Tests
 
             Tool run = tools.Single(t => t.Name == "run_device_commands").ProtocolTool;
             JsonElement properties = run.InputSchema.GetProperty("properties");
-            CollectionAssert.AreEquivalent(new[] { "adapterId", "deviceApSsid", "commands", "wifiSsid" },
+            CollectionAssert.AreEquivalent(new[] { "adapterId", "deviceApSsid", "commands", "wifiSsid", "settings" },
                 properties.EnumerateObject().Select(p => p.Name).ToArray()); // progress·cancellationToken은 schema에 없다
-            CollectionAssert.AreEquivalent(new[] { "adapterId", "deviceApSsid", "commands" }, Required(run)); // wifiSsid는 비필수
+            CollectionAssert.AreEquivalent(new[] { "adapterId", "deviceApSsid", "commands" }, Required(run)); // wifiSsid·settings는 비필수
+            JsonElement settings = properties.GetProperty("settings"); // #9: 필드 모두 선택, camelCase
+            CollectionAssert.AreEquivalent(
+                new[] { "apiServerAddr", "apiServerPort", "serverAddr", "serverPort", "sslSupport", "userId", "company", "model", "lati", "long", "topic" },
+                settings.GetProperty("properties").EnumerateObject().Select(p => p.Name).ToArray());
+            Assert.IsEmpty(Required(settings));
             CollectionAssert.AreEquivalent(new[] { "adapterId" }, Required(tools.Single(t => t.Name == "scan_device_aps").ProtocolTool));
         }
 
@@ -152,6 +157,28 @@ namespace Biz.Bizadm.PowerManager.DeviceConfig.Mcp.Tests
             Assert.IsFalse(string.IsNullOrWhiteSpace(text));
             // 원인 문구는 환경마다 다르므로(Adapter not found, WLAN 서비스 오류, not implemented) 원인 없는 일반 문구가 아닌지만 본다
             Assert.AreNotEqual("An error occurred invoking 'scan_device_aps'.", text);
+        }
+
+        [TestMethod]
+        public async Task Stdio_RunUnknownSettingsKey_ReturnsErrorWithKey()
+        {
+            await using McpClient client = await StartClientAsync();
+
+            // SDK 바인딩 경로 확인(#9). 바인딩에서 거부하면 원인 없는 일반 문구가 나가므로 RunResult.error로 받는다.
+            // adapterId가 없는 값이라 검사를 통과하더라도 Wi-Fi 접속 전에 끝난다
+            CallToolResult result = await client.CallToolAsync("run_device_commands", new Dictionary<string, object?>
+            {
+                ["adapterId"] = "nope",
+                ["deviceApSsid"] = "DWD-NOPE",
+                ["commands"] = new[] { "Measurement" },
+                ["settings"] = new Dictionary<string, object?> { ["user_id"] = "x" },
+            }, cancellationToken: TestContext.CancellationToken);
+
+            Assert.IsFalse(result.IsError ?? false);
+            JsonElement content = JsonSerializer.SerializeToElement(result.StructuredContent);
+            Assert.IsFalse(content.GetProperty("success").GetBoolean());
+            Assert.AreEqual("ArgumentException: Unknown settings keys: user_id (use camelCase names such as userId, apiServerPort)",
+                content.GetProperty("error").GetString());
         }
 
         [TestMethod]

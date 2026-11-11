@@ -4,6 +4,7 @@ using Biz.Bizadm.PowerManager.DeviceConfig.Protocol;
 using Biz.Bizadm.PowerManager.DeviceConfig.Tests.TestSupport;
 using Biz.Bizadm.PowerManager.DeviceConfig.Wifi;
 using ModelContextProtocol;
+using System.Text.Json;
 
 namespace Biz.Bizadm.PowerManager.DeviceConfig.Mcp.Tests
 {
@@ -106,7 +107,7 @@ namespace Biz.Bizadm.PowerManager.DeviceConfig.Mcp.Tests
             FakeHostWifi hostWifi = new();
 
             DeviceConfigService.RunResult result = await Service(hostWifi, ServiceSettings(device))
-                .RunAsync(AdapterId, DeviceAp, ["OnCmd", "Measurement"], null, null, TestContext.CancellationToken);
+                .RunAsync(AdapterId, DeviceAp, ["OnCmd", "Measurement"], null, null, null, TestContext.CancellationToken);
 
             Assert.IsTrue(result.Success);
             Assert.IsNull(result.Error);
@@ -124,7 +125,7 @@ namespace Biz.Bizadm.PowerManager.DeviceConfig.Mcp.Tests
             SyncProgress progress = new();
 
             await Service(new FakeHostWifi(), ServiceSettings(device))
-                .RunAsync(AdapterId, DeviceAp, ["OnCmd", "Measurement"], null, progress, TestContext.CancellationToken);
+                .RunAsync(AdapterId, DeviceAp, ["OnCmd", "Measurement"], null, null, progress, TestContext.CancellationToken);
 
             ProgressNotificationValue[] reports = progress.Reports.ToArray();
             CollectionAssert.AreEqual(new float[] { 0, 1, 2 }, reports.Select(r => r.Progress).ToArray());
@@ -139,7 +140,7 @@ namespace Biz.Bizadm.PowerManager.DeviceConfig.Mcp.Tests
             FakeHostWifi hostWifi = new();
 
             DeviceConfigService.RunResult result = await Service(hostWifi, ServiceSettings(device))
-                .RunAsync(AdapterId, DeviceAp, ["OnCmd", "OverLoad", "Measurement"], null, null, TestContext.CancellationToken);
+                .RunAsync(AdapterId, DeviceAp, ["OnCmd", "OverLoad", "Measurement"], null, null, null, TestContext.CancellationToken);
 
             Assert.IsFalse(result.Success);
             Assert.AreEqual("OnCmd", result.Results.Single().Command);
@@ -160,9 +161,9 @@ namespace Biz.Bizadm.PowerManager.DeviceConfig.Mcp.Tests
             };
 
             DeviceConfigService.RunResult r1 = await Service(noSettingsWifi, noSettings)
-                .RunAsync(AdapterId, DeviceAp, ["ConnectAp"], "MyRouter", null, TestContext.CancellationToken);
+                .RunAsync(AdapterId, DeviceAp, ["ConnectAp"], "MyRouter", null, null, TestContext.CancellationToken);
             DeviceConfigService.RunResult r2 = await Service(noProfilesWifi, ServiceSettings(device, profiles: []))
-                .RunAsync(AdapterId, DeviceAp, ["ConnectAp"], "MyRouter", null, TestContext.CancellationToken);
+                .RunAsync(AdapterId, DeviceAp, ["ConnectAp"], "MyRouter", null, null, TestContext.CancellationToken);
 
             foreach (DeviceConfigService.RunResult r in new[] { r1, r2 })
             {
@@ -184,7 +185,7 @@ namespace Biz.Bizadm.PowerManager.DeviceConfig.Mcp.Tests
             FakeHostWifi hostWifi = new();
 
             DeviceConfigService.RunResult result = await Service(hostWifi, ServiceSettings(device))
-                .RunAsync(AdapterId, DeviceAp, ["Measurement", "ConnectAp"], wifiSsid, null, TestContext.CancellationToken);
+                .RunAsync(AdapterId, DeviceAp, ["Measurement", "ConnectAp"], wifiSsid, null, null, TestContext.CancellationToken);
 
             Assert.IsFalse(result.Success);
             Assert.AreEqual($"ArgumentException: wifiSsid must be one of list_wifi_profiles for ConnectAp: {wifiSsid}", result.Error);
@@ -203,7 +204,7 @@ namespace Biz.Bizadm.PowerManager.DeviceConfig.Mcp.Tests
             FakeHostWifi hostWifi = new();
 
             DeviceConfigService.RunResult result = await Service(hostWifi, ServiceSettings(device))
-                .RunAsync(AdapterId, DeviceAp, ["OnCmd", command], null, null, TestContext.CancellationToken);
+                .RunAsync(AdapterId, DeviceAp, ["OnCmd", command], null, null, null, TestContext.CancellationToken);
 
             Assert.IsFalse(result.Success);
             Assert.AreEqual($"ArgumentException: Unknown command: {command}", result.Error);
@@ -217,7 +218,7 @@ namespace Biz.Bizadm.PowerManager.DeviceConfig.Mcp.Tests
             FakeHostWifi hostWifi = new();
 
             DeviceConfigService.RunResult result = await Service(hostWifi, ServiceSettings(device))
-                .RunAsync(AdapterId, DeviceAp, [], null, null, TestContext.CancellationToken);
+                .RunAsync(AdapterId, DeviceAp, [], null, null, null, TestContext.CancellationToken);
 
             Assert.IsFalse(result.Success);
             Assert.AreEqual("ArgumentException: commands must have at least one item", result.Error);
@@ -231,7 +232,7 @@ namespace Biz.Bizadm.PowerManager.DeviceConfig.Mcp.Tests
             FakeHostWifi hostWifi = new() { ThrowOnListAdapters = new NotImplementedException() };
 
             DeviceConfigService.RunResult result = await Service(hostWifi, ServiceSettings(device, host: device.Host))
-                .RunAsync("ignored", "ignored", ["Measurement"], null, null, TestContext.CancellationToken);
+                .RunAsync("ignored", "ignored", ["Measurement"], null, null, null, TestContext.CancellationToken);
 
             Assert.IsTrue(result.Success, result.Error);
             Assert.AreEqual(1, device.ConnectionCount);
@@ -255,7 +256,7 @@ namespace Biz.Bizadm.PowerManager.DeviceConfig.Mcp.Tests
 
             await Assert.ThrowsAsync<OperationCanceledException>(
                 () => Service(hostWifi, ServiceSettings(device, timeout: TimeSpan.FromSeconds(30)))
-                    .RunAsync(AdapterId, DeviceAp, ["Measurement"], null, null, cts.Token));
+                    .RunAsync(AdapterId, DeviceAp, ["Measurement"], null, null, null, cts.Token));
 
             Assert.IsNotNull(hostWifi.Connected);
             Assert.AreEqual((FakeHostWifi.Adapter, (string?)"HomeRouter"), hostWifi.Restored);
@@ -282,7 +283,7 @@ namespace Biz.Bizadm.PowerManager.DeviceConfig.Mcp.Tests
             GatedHostWifi hostWifi = new(new FakeHostWifi());
             DeviceConfigService service = Service(hostWifi, ServiceSettings(device));
 
-            Task<DeviceConfigService.RunResult> run = service.RunAsync(AdapterId, DeviceAp, ["Measurement"], null, null, TestContext.CancellationToken);
+            Task<DeviceConfigService.RunResult> run = service.RunAsync(AdapterId, DeviceAp, ["Measurement"], null, null, null, TestContext.CancellationToken);
             await hostWifi.Entered.Task.WaitAsync(TimeSpan.FromSeconds(10), TestContext.CancellationToken);
             Task<DeviceConfigService.AdaptersResult> lookup = service.ListAdaptersAsync(TestContext.CancellationToken);
             await Task.Delay(300, TestContext.CancellationToken);
@@ -300,7 +301,7 @@ namespace Biz.Bizadm.PowerManager.DeviceConfig.Mcp.Tests
             ListLogger<DeviceConfigRunner> logger = new();
 
             DeviceConfigService.RunResult result = await Service(new FakeHostWifi(), ServiceSettings(device), logger)
-                .RunAsync(AdapterId, DeviceAp, ["ConnectAp"], "MyRouter", null, TestContext.CancellationToken);
+                .RunAsync(AdapterId, DeviceAp, ["ConnectAp"], "MyRouter", null, null, TestContext.CancellationToken);
 
             Assert.IsTrue(result.Success, result.Error);
             Assert.AreEqual(new DeviceConfigService.CommandResult("ConnectAp", "OK (MyRouter)"), result.Results.Single());
@@ -315,8 +316,8 @@ namespace Biz.Bizadm.PowerManager.DeviceConfig.Mcp.Tests
             GatedHostWifi hostWifi = new(new FakeHostWifi());
             DeviceConfigService service = Service(hostWifi, ServiceSettings(device));
 
-            Task<DeviceConfigService.RunResult> first = service.RunAsync(AdapterId, DeviceAp, ["Measurement"], null, null, TestContext.CancellationToken);
-            Task<DeviceConfigService.RunResult> second = service.RunAsync(AdapterId, DeviceAp, ["OnCmd"], null, null, TestContext.CancellationToken);
+            Task<DeviceConfigService.RunResult> first = service.RunAsync(AdapterId, DeviceAp, ["Measurement"], null, null, null, TestContext.CancellationToken);
+            Task<DeviceConfigService.RunResult> second = service.RunAsync(AdapterId, DeviceAp, ["OnCmd"], null, null, null, TestContext.CancellationToken);
             await hostWifi.Entered.Task.WaitAsync(TimeSpan.FromSeconds(10), TestContext.CancellationToken);
             await Task.Delay(300, TestContext.CancellationToken);
 
@@ -337,6 +338,159 @@ namespace Biz.Bizadm.PowerManager.DeviceConfig.Mcp.Tests
             DeviceConfigService.WifiProfilesResult result = new DeviceConfigTools(Service(new FakeHostWifi(), ServiceSettings(device))).ListWifiProfiles();
 
             CollectionAssert.AreEqual(new[] { "MyRouter", "Other" }, result.Ssids.ToArray());
+        }
+
+        private static DeviceConfigService.ServiceSettings WithoutFileSettings(MockDevice device) => ServiceSettings(device) with
+        {
+            BaseOptions = ServiceSettings(device).BaseOptions with { Settings = null },
+        };
+
+        private static readonly DeviceConfigService.SettingsOverride RequiredOverride = new()
+        {
+            ApiServerAddr = "api.arg.local",
+            ApiServerPort = 8443,
+            ServerAddr = "mqtt.arg.local",
+            ServerPort = 1883,
+            UserId = "arg-user",
+        };
+
+        /// <summary>장치가 받은 설정 JSON 줄(pass 포함).</summary>
+        private static string SettingsLine(MockDevice device) => device.Received.Single(r => r.Line.Contains("\"pass\"")).Line;
+
+        [TestMethod]
+        public async Task Run_ConnectAp_SettingsOverride_MergesPerField()
+        {
+            await using MockDevice device = new(Respond);
+            DeviceConfigService.SettingsOverride o = new() { UserId = "dev01", ApiServerAddr = "api.dev01.local", Lati = "37.5" };
+
+            DeviceConfigService.RunResult result = await Service(new FakeHostWifi(), ServiceSettings(device))
+                .RunAsync(AdapterId, DeviceAp, ["ConnectAp"], "MyRouter", o, null, TestContext.CancellationToken);
+
+            Assert.IsTrue(result.Success, result.Error);
+            string line = SettingsLine(device);
+            StringAssert.Contains(line, "\"user_id\":\"dev01\"");               // 인자가 파일 값을 이긴다
+            StringAssert.Contains(line, "\"api_server_addr\":\"api.dev01.local\"");
+            StringAssert.Contains(line, "\"lati\":\"37.5\"");
+            StringAssert.Contains(line, "\"server_addr\":\"mqtt.example.local\""); // 넘기지 않은 필드는 파일 값
+            StringAssert.Contains(line, "\"server_port\":\"8883\"");
+        }
+
+        [TestMethod]
+        public async Task Run_ConnectAp_NoFileSettings_ArgumentComplete_UsesDefaults()
+        {
+            await using MockDevice device = new(Respond);
+
+            DeviceConfigService.RunResult result = await Service(new FakeHostWifi(), WithoutFileSettings(device))
+                .RunAsync(AdapterId, DeviceAp, ["ConnectAp"], "MyRouter", RequiredOverride, null, TestContext.CancellationToken);
+
+            Assert.IsTrue(result.Success, result.Error);
+            string line = SettingsLine(device);
+            StringAssert.Contains(line, "\"api_server_addr\":\"api.arg.local\"");
+            StringAssert.Contains(line, "\"api_server_port\":\"8443\"");
+            StringAssert.Contains(line, "\"user_id\":\"arg-user\"");
+            StringAssert.Contains(line, "\"company\":\"DAWONDNS\"");
+            StringAssert.Contains(line, "\"model\":\"B540_W\"");
+            StringAssert.Contains(line, "\"topic\":\"dwd\"");
+            StringAssert.Contains(line, "\"ssl_support\":\"no\"");
+        }
+
+        [TestMethod]
+        public async Task Run_ConnectAp_NoFileSettings_ArgumentMissing_FailsBeforeWifi()
+        {
+            await using MockDevice device = new(Respond);
+            FakeHostWifi hostWifi = new();
+
+            DeviceConfigService.RunResult result = await Service(hostWifi, WithoutFileSettings(device))
+                .RunAsync(AdapterId, DeviceAp, ["ConnectAp"], "MyRouter", new() { UserId = "x" }, null, TestContext.CancellationToken);
+
+            Assert.IsFalse(result.Success);
+            Assert.AreEqual("ArgumentException: ConnectAp requires settings: missing apiServerAddr, apiServerPort, serverAddr, serverPort (set Settings in the config file or the settings argument)", result.Error);
+            Assert.IsEmpty(hostWifi.Calls);
+        }
+
+        [TestMethod]
+        public async Task Run_ConnectAp_EmptyOverride_NoFileSettings_ReportsAllMissing()
+        {
+            await using MockDevice device = new(Respond);
+            FakeHostWifi hostWifi = new();
+
+            DeviceConfigService.RunResult result = await Service(hostWifi, WithoutFileSettings(device))
+                .RunAsync(AdapterId, DeviceAp, ["ConnectAp"], "MyRouter", new(), null, TestContext.CancellationToken);
+
+            Assert.AreEqual("ArgumentException: ConnectAp requires settings: missing apiServerAddr, apiServerPort, serverAddr, serverPort, userId (set Settings in the config file or the settings argument)", result.Error);
+            Assert.IsEmpty(hostWifi.Calls);
+        }
+
+        [TestMethod]
+        [DataRow(0)]
+        [DataRow(65536)]
+        public async Task Run_ConnectAp_SettingsPortOutOfRange_FailsBeforeWifi(int port)
+        {
+            await using MockDevice device = new(Respond);
+            FakeHostWifi noFileWifi = new();
+            FakeHostWifi fileWifi = new();
+
+            DeviceConfigService.RunResult r1 = await Service(noFileWifi, WithoutFileSettings(device))
+                .RunAsync(AdapterId, DeviceAp, ["ConnectAp"], "MyRouter", RequiredOverride with { ApiServerPort = port }, null, TestContext.CancellationToken);
+            DeviceConfigService.RunResult r2 = await Service(fileWifi, ServiceSettings(device))
+                .RunAsync(AdapterId, DeviceAp, ["ConnectAp"], "MyRouter", new() { ServerPort = port }, null, TestContext.CancellationToken);
+
+            Assert.AreEqual($"ArgumentException: settings.apiServerPort out of range: {port}", r1.Error);
+            Assert.AreEqual($"ArgumentException: settings.serverPort out of range: {port}", r2.Error);
+            Assert.IsEmpty(noFileWifi.Calls);
+            Assert.IsEmpty(fileWifi.Calls);
+        }
+
+        [TestMethod]
+        public async Task Run_ConnectAp_OverrideWithoutProfiles_KeepsLegacyMessage()
+        {
+            await using MockDevice device = new(Respond);
+            FakeHostWifi hostWifi = new();
+
+            DeviceConfigService.RunResult result = await Service(hostWifi, ServiceSettings(device, profiles: []))
+                .RunAsync(AdapterId, DeviceAp, ["ConnectAp"], "MyRouter", RequiredOverride, null, TestContext.CancellationToken);
+
+            Assert.AreEqual("ArgumentException: ConnectAp requires Settings and WifiProfiles in the config file", result.Error);
+            Assert.IsEmpty(hostWifi.Calls);
+        }
+
+        [TestMethod]
+        public async Task Run_NoConnectAp_SettingsIgnored()
+        {
+            await using MockDevice device = new(Respond);
+
+            DeviceConfigService.RunResult result = await Service(new FakeHostWifi(), WithoutFileSettings(device))
+                .RunAsync(AdapterId, DeviceAp, ["Measurement"], null, new() { ApiServerPort = 0 }, null, TestContext.CancellationToken);
+
+            Assert.IsTrue(result.Success, result.Error);
+        }
+
+        [TestMethod]
+        public void SettingsOverride_Deserialize_CamelCase()
+        {
+            DeviceConfigService.SettingsOverride? o = JsonSerializer.Deserialize<DeviceConfigService.SettingsOverride>(
+                """{"userId":"x","apiServerPort":443,"lati":"37.5","sslSupport":true}""", McpJsonUtilities.DefaultOptions);
+
+            Assert.AreEqual(new DeviceConfigService.SettingsOverride { UserId = "x", ApiServerPort = 443, Lati = "37.5", SslSupport = true }, o);
+        }
+
+        [TestMethod]
+        [DataRow("""["ConnectAp"]""")]
+        [DataRow("""["Measurement"]""")]
+        public async Task Run_UnknownSettingsKey_FailsBeforeWifi(string commandsJson)
+        {
+            await using MockDevice device = new(Respond);
+            FakeHostWifi hostWifi = new();
+            DeviceConfigService.SettingsOverride o = JsonSerializer.Deserialize<DeviceConfigService.SettingsOverride>(
+                """{"user_id":"dev01","userId":"ok"}""", McpJsonUtilities.DefaultOptions)!;
+
+            DeviceConfigService.RunResult result = await Service(hostWifi, ServiceSettings(device))
+                .RunAsync(AdapterId, DeviceAp, JsonSerializer.Deserialize<string[]>(commandsJson)!, "MyRouter", o, null, TestContext.CancellationToken);
+
+            Assert.IsFalse(result.Success);
+            Assert.AreEqual("ArgumentException: Unknown settings keys: user_id (use camelCase names such as userId, apiServerPort)", result.Error);
+            Assert.IsEmpty(hostWifi.Calls);
+            Assert.AreEqual(0, device.ConnectionCount);
         }
 
         [TestMethod]
