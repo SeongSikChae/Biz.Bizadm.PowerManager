@@ -10,6 +10,17 @@
     <PackageReference Include="MSTest" />
   </ItemGroup>
 
+  <!--
+    stdio 통합 테스트는 Mcp 프로젝트 자체 출력 폴더의 apphost를 실행한다(테스트 출력 폴더의 Mcp.dll은 deps.json·runtimes 자산이 다를 수 있음).
+    확장자 없는 경로이며, 테스트에서 Windows면 ".exe"를 붙인다.
+  -->
+  <ItemGroup>
+    <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute">
+      <_Parameter1>McpExePath</_Parameter1>
+      <_Parameter2>$(MSBuildThisFileDirectory)..\..\src\Biz.Bizadm.PowerManager.DeviceConfig.Mcp\bin\$(Configuration)\$(TargetFramework)\Biz.Bizadm.PowerManager.DeviceConfig.Mcp</_Parameter2>
+    </AssemblyAttribute>
+  </ItemGroup>
+
   <!-- 모의 PC Wi-Fi·모의 장치·로거는 DeviceConfig.Tests의 것을 그대로 쓴다(원본 수정 없음) -->
   <ItemGroup>
     <Compile Include="..\Biz.Bizadm.PowerManager.DeviceConfig.Tests\TestSupport\*.cs" Link="TestSupport\%(Filename)%(Extension)" />
