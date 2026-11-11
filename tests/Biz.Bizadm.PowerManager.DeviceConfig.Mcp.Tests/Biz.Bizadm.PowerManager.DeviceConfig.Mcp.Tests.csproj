@@ -10,6 +10,11 @@
     <PackageReference Include="MSTest" />
   </ItemGroup>
 
+  <!-- 모의 PC Wi-Fi·모의 장치·로거는 DeviceConfig.Tests의 것을 그대로 쓴다(원본 수정 없음) -->
+  <ItemGroup>
+    <Compile Include="..\Biz.Bizadm.PowerManager.DeviceConfig.Tests\TestSupport\*.cs" Link="TestSupport\%(Filename)%(Extension)" />
+  </ItemGroup>
+
   <ItemGroup>
     <ProjectReference Include="..\..\src\Biz.Bizadm.PowerManager.DeviceConfig.Mcp\Biz.Bizadm.PowerManager.DeviceConfig.Mcp.csproj" />
     <ProjectReference Include="..\..\src\Biz.Bizadm.PowerManager.DeviceConfig\Biz.Bizadm.PowerManager.DeviceConfig.csproj" />

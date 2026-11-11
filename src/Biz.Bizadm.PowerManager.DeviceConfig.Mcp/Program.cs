@@ -53,7 +53,7 @@ namespace Biz.Bizadm.PowerManager.DeviceConfig.Mcp
                 return ExitCode.ConfigurationError;
             }
 
-            IReadOnlyList<WifiProfile> wifiProfiles; // U4에서 tool 서비스 설정으로 등록한다
+            IReadOnlyList<WifiProfile> wifiProfiles;
             try
             {
                 wifiProfiles = ProtectSecrets(cmdMain.ConfigFilePath, mcpConfiguration);
@@ -67,7 +67,7 @@ namespace Biz.Bizadm.PowerManager.DeviceConfig.Mcp
             IHost host;
             try
             {
-                host = CreateHostApplication(args, cmdMain, mcpConfiguration);
+                host = CreateHostApplication(args, cmdMain, mcpConfiguration, wifiProfiles);
             }
             catch (Exception ex)
             {
@@ -108,7 +108,7 @@ namespace Biz.Bizadm.PowerManager.DeviceConfig.Mcp
             return profiles;
         }
 
-        private static IHost CreateHostApplication(string[] args, CmdMain cmdMain, McpConfiguration mcpConfiguration)
+        private static IHost CreateHostApplication(string[] args, CmdMain cmdMain, McpConfiguration mcpConfiguration, IReadOnlyList<WifiProfile> wifiProfiles)
         {
             HostApplicationBuilder builder = Host.CreateApplicationBuilder(new HostApplicationBuilderSettings
             {
@@ -139,7 +139,9 @@ namespace Biz.Bizadm.PowerManager.DeviceConfig.Mcp
             });
 
             builder.Services.AddSingleton(sp => HostWifiLoader.CreateForCurrentOs(sp.GetRequiredService<ILogger<DeviceConfigRunner>>()));
-            builder.Services.AddMcpServer().WithStdioServerTransport(); // tool 등록은 U4
+            builder.Services.AddSingleton(new DeviceConfigService.ServiceSettings(mcpConfiguration.ToOptions(wifiProfiles), wifiProfiles));
+            builder.Services.AddSingleton<DeviceConfigService>();
+            builder.Services.AddMcpServer().WithStdioServerTransport().WithTools<DeviceConfigTools>();
 
             return builder.Build();
         }
