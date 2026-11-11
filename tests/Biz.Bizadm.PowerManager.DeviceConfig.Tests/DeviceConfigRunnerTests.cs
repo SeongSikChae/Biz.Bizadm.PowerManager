@@ -182,6 +182,52 @@ namespace Biz.Bizadm.PowerManager.DeviceConfig.Tests
         }
 
         [TestMethod]
+        public async Task Run_ReportsEachCompletedCommand()
+        {
+            await using MockDevice device = new(Respond);
+            List<DeviceCommandResult> results = [];
+
+            await Runner(new FakeHostWifi(), new FakeSelector(), Options(device, UnreachableHost, DeviceCommand.OnCmd, DeviceCommand.Measurement), new())
+                .RunAsync(results.Add, TestContext.CancellationToken);
+
+            CollectionAssert.AreEqual(
+                new[]
+                {
+                    new DeviceCommandResult(DeviceCommand.OnCmd, "[DUT->PC] ON_CMD_OK#"),
+                    new DeviceCommandResult(DeviceCommand.Measurement, "[DUT->PC] MEASUREMENT_W:0.0#"),
+                },
+                results);
+        }
+
+        [TestMethod]
+        public async Task Run_CommandFails_ReportsOnlyCompleted()
+        {
+            await using MockDevice device = new(Respond); // OverLoad는 응답 없음 → 시간 초과
+            FakeHostWifi hostWifi = new();
+            List<DeviceCommandResult> results = [];
+
+            await Assert.ThrowsExactlyAsync<TimeoutException>(
+                () => Runner(hostWifi, new FakeSelector(), Options(device, UnreachableHost, DeviceCommand.OnCmd, DeviceCommand.OverLoad), new())
+                    .RunAsync(results.Add, TestContext.CancellationToken));
+
+            Assert.AreEqual(1, results.Count);
+            Assert.AreEqual(DeviceCommand.OnCmd, results[0].Command);
+            Assert.IsNotNull(hostWifi.Restored);
+        }
+
+        [TestMethod]
+        public async Task Run_ConnectAp_ReportsSelectedSsid()
+        {
+            await using MockDevice device = new(Respond);
+            List<DeviceCommandResult> results = [];
+
+            await Runner(new FakeHostWifi(), new FakeSelector(), Options(device, UnreachableHost, DeviceCommand.ConnectAp), new())
+                .RunAsync(results.Add, TestContext.CancellationToken);
+
+            CollectionAssert.AreEqual(new[] { new DeviceCommandResult(DeviceCommand.ConnectAp, "OK (MyRouter)") }, results);
+        }
+
+        [TestMethod]
         public async Task Run_NoRegisteredWifiInApScan_DoesNotSendSettings()
         {
             await using MockDevice device = new(line => line == "{\"command\":\"apscan\"}" ? "{\"SCAN_AP_LIST\":{\"Other:-40\"}}" : Respond(line));

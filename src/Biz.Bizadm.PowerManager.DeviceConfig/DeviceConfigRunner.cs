@@ -12,7 +12,10 @@ namespace Biz.Bizadm.PowerManager.DeviceConfig
     /// </summary>
     public sealed class DeviceConfigRunner(IHostWifi hostWifi, IDeviceConfigSelector selector, DeviceConfigOptions options, ILogger<DeviceConfigRunner> logger)
     {
-        public async Task RunAsync(CancellationToken cancellationToken)
+        public Task RunAsync(CancellationToken cancellationToken) => RunAsync(null, cancellationToken);
+
+        /// <param name="onCommandCompleted">명령이 성공할 때마다 호출된다. 실패한 명령은 통보하지 않는다.</param>
+        public async Task RunAsync(Action<DeviceCommandResult>? onCommandCompleted, CancellationToken cancellationToken)
         {
             WifiAdapter? connectedAdapter = null; // ConnectOpenAsync를 호출한 어댑터(복구 대상)
             string? previousSsid = null;
@@ -45,10 +48,23 @@ namespace Biz.Bizadm.PowerManager.DeviceConfig
                 {
                     logger.LogInformation("Command {Command}", command);
                     if (command == DeviceCommand.ConnectAp)
-                        await client.ConnectApAsync(SelectWifiAsync,
+                    {
+                        string? selectedSsid = null;
+                        await client.ConnectApAsync(async (scanned, ct) =>
+                            {
+                                (string Ssid, string Pass) selected = await SelectWifiAsync(scanned, ct);
+                                selectedSsid = selected.Ssid;
+                                return selected;
+                            },
                             options.Settings ?? throw new InvalidOperationException("Settings is required for ConnectAp"), cancellationToken);
+                        onCommandCompleted?.Invoke(new DeviceCommandResult(command, $"OK ({selectedSsid})"));
+                    }
                     else
-                        logger.LogInformation("{Command} response: {Response}", command, await client.ExecuteAsync(command, cancellationToken));
+                    {
+                        string response = await client.ExecuteAsync(command, cancellationToken);
+                        logger.LogInformation("{Command} response: {Response}", command, response);
+                        onCommandCompleted?.Invoke(new DeviceCommandResult(command, response));
+                    }
                 }
                 logger.LogInformation("Device configuration completed");
             }
