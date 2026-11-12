@@ -1,4 +1,6 @@
+using Biz.Bizadm.PowerManager.Core.Mqtt;
 using Biz.Bizadm.PowerManager.Server.Core;
+using Biz.Bizadm.PowerManager.Server.Spa.Mqtt;
 using CommandLine;
 using Microsoft.Extensions.FileProviders;
 using System.Configuration;
@@ -107,6 +109,12 @@ namespace Biz.Bizadm.PowerManager.Server.Spa
                     configureOptions.MaxAge = TimeSpan.FromDays(365);
                 });
             }
+
+            // 브로커는 KMS 복호화 후 설정을 받는다. 테스트가 configureBuilder에서 핸들러를 교체할 수 있도록 그 앞에 등록한다.
+            builder.Services.AddSingleton(c);
+            builder.Services.AddSingleton<IDeviceMessageHandler, LoggingDeviceMessageHandler>();
+            builder.Services.AddSingleton<IDeviceCommandPublisher, MqttDeviceCommandPublisher>();
+            builder.Services.AddHostedService<MqttBrokerHostedService>();
 
             configureBuilder?.Invoke(builder);
             WebApplication app = builder.Build();
