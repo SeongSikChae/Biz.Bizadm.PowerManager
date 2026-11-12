@@ -1,5 +1,6 @@
 <Solution>
   <Folder Name="/src/">
+    <Project Path="src/Biz.Bizadm.PowerManager.Core/Biz.Bizadm.PowerManager.Core.csproj" />
     <Project Path="src/Biz.Bizadm.PowerManager.DeviceConfig.App/Biz.Bizadm.PowerManager.DeviceConfig.App.csproj" />
     <Project Path="src/Biz.Bizadm.PowerManager.DeviceConfig.Mcp/Biz.Bizadm.PowerManager.DeviceConfig.Mcp.csproj" />
     <Project Path="src/Biz.Bizadm.PowerManager.DeviceConfig.HostWifi.Runtime.linux/Biz.Bizadm.PowerManager.DeviceConfig.HostWifi.Runtime.linux.csproj" />
@@ -9,6 +10,7 @@
     <Project Path="src/Biz.Bizadm.PowerManager.Server.Core/Biz.Bizadm.PowerManager.Server.Core.csproj" />
   </Folder>
   <Folder Name="/tests/">
+    <Project Path="tests/Biz.Bizadm.PowerManager.Core.Tests/Biz.Bizadm.PowerManager.Core.Tests.csproj" />
     <Project Path="tests/Biz.Bizadm.PowerManager.DeviceConfig.Mcp.Tests/Biz.Bizadm.PowerManager.DeviceConfig.Mcp.Tests.csproj" />
     <Project Path="tests/Biz.Bizadm.PowerManager.DeviceConfig.Tests/Biz.Bizadm.PowerManager.DeviceConfig.Tests.csproj" />
     <Project Path="tests/Biz.Bizadm.PowerManager.Server.Core.Tests/Biz.Bizadm.PowerManager.Server.Core.Tests.csproj" />
