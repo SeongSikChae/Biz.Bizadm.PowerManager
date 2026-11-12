@@ -95,7 +95,8 @@ namespace Biz.Bizadm.PowerManager.Server.Spa
 
             builder.Services.AddProblemDetails();
             builder.Services.AddHealthChecks();
-            builder.Services.AddControllers();
+            // 진입 어셈블리가 다른 경우(테스트 호스트)에도 이 어셈블리의 컨트롤러를 찾도록 명시한다.
+            builder.Services.AddControllers().AddApplicationPart(typeof(Program).Assembly);
             builder.Services.AddOpenApi();
             if (useTls)
             {
