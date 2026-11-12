@@ -8,11 +8,13 @@
     <Project Path="src/Biz.Bizadm.PowerManager.DeviceConfig.HostWifi.Runtime.win/Biz.Bizadm.PowerManager.DeviceConfig.HostWifi.Runtime.win.csproj" />
     <Project Path="src/Biz.Bizadm.PowerManager.DeviceConfig/Biz.Bizadm.PowerManager.DeviceConfig.csproj" />
     <Project Path="src/Biz.Bizadm.PowerManager.Server.Core/Biz.Bizadm.PowerManager.Server.Core.csproj" />
+    <Project Path="src/Biz.Bizadm.PowerManager.Server.Spa/Biz.Bizadm.PowerManager.Server.Spa.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/Biz.Bizadm.PowerManager.Core.Tests/Biz.Bizadm.PowerManager.Core.Tests.csproj" />
     <Project Path="tests/Biz.Bizadm.PowerManager.DeviceConfig.Mcp.Tests/Biz.Bizadm.PowerManager.DeviceConfig.Mcp.Tests.csproj" />
     <Project Path="tests/Biz.Bizadm.PowerManager.DeviceConfig.Tests/Biz.Bizadm.PowerManager.DeviceConfig.Tests.csproj" />
     <Project Path="tests/Biz.Bizadm.PowerManager.Server.Core.Tests/Biz.Bizadm.PowerManager.Server.Core.Tests.csproj" />
+    <Project Path="tests/Biz.Bizadm.PowerManager.Server.Spa.Tests/Biz.Bizadm.PowerManager.Server.Spa.Tests.csproj" />
   </Folder>
 </Solution>
