@@ -2,6 +2,8 @@ using Biz.Bizadm.PowerManager.DeviceConfig.HostWifi;
 using Biz.Bizadm.PowerManager.DeviceConfig.Mcp.Security;
 using Biz.Bizadm.PowerManager.DeviceConfig.Wifi;
 using CommandLine;
+using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -12,8 +14,9 @@ using System.Configuration;
 namespace Biz.Bizadm.PowerManager.DeviceConfig.Mcp
 {
     /// <summary>
-    /// stdio MCP 서버. stdout은 MCP 프로토콜 전용이므로 모든 메시지·로그는 stderr와 파일로 보낸다(설계 2절).
-    /// --config, --log, ContentRootPath는 절대 경로라고 가정한다.
+    /// MCP Streamable HTTP 서버. 루프백(127.0.0.1, ::1)의 Http.Port에만 바인딩하고 endpoint는 /mcp다.
+    /// 콘솔 실행과 Windows 서비스 실행을 모두 지원한다(AddWindowsService는 서비스로 시작됐을 때만 동작).
+    /// --config, --log, ContentRootPath는 절대 경로라고 가정한다(서비스의 작업 폴더는 System32).
     /// </summary>
     internal class Program
     {
@@ -64,7 +67,7 @@ namespace Biz.Bizadm.PowerManager.DeviceConfig.Mcp
                 return ExitCode.ConfigurationError;
             }
 
-            IHost host;
+            WebApplication host;
             try
             {
                 host = CreateHostApplication(args, cmdMain, mcpConfiguration, wifiProfiles);
@@ -75,14 +78,14 @@ namespace Biz.Bizadm.PowerManager.DeviceConfig.Mcp
                 return ExitCode.RuntimeError;
             }
 
-            using (host)
+            await using (host)
             {
                 // RunAsync는 finally에서 Host를 dispose하므로 쓰지 않는다(catch에서 로그를 남길 수 있게 dispose는 using에 맡긴다)
                 ILogger<Program> logger = host.Services.GetRequiredService<ILogger<Program>>();
                 try
                 {
                     await host.StartAsync();
-                    await host.WaitForShutdownAsync(); // stdin이 닫히면 stdio transport가 Host를 정지시킨다. 정지 후 StopAsync까지 호출한다
+                    await host.WaitForShutdownAsync(); // Ctrl+C 또는 SCM 중지로 정지한다. 정지 후 StopAsync까지 호출한다
                     return ExitCode.Success;
                 }
                 catch (Exception ex)
@@ -108,15 +111,19 @@ namespace Biz.Bizadm.PowerManager.DeviceConfig.Mcp
             return profiles;
         }
 
-        private static IHost CreateHostApplication(string[] args, CmdMain cmdMain, McpConfiguration mcpConfiguration, IReadOnlyList<WifiProfile> wifiProfiles)
+        private static WebApplication CreateHostApplication(string[] args, CmdMain cmdMain, McpConfiguration mcpConfiguration, IReadOnlyList<WifiProfile> wifiProfiles)
         {
-            HostApplicationBuilder builder = Host.CreateApplicationBuilder(new HostApplicationBuilderSettings
+            WebApplicationBuilder builder = WebApplication.CreateBuilder(new WebApplicationOptions
             {
                 Args = args,
                 ContentRootPath = mcpConfiguration.ContentRootPath,
             });
 
-            // 기본 Console 로거는 stdout에 쓰므로 제거한다
+            // 루프백에만 바인딩한다. 코드로 정한 Listen이 ASPNETCORE_URLS 등 다른 URL 설정보다 우선한다
+            builder.WebHost.ConfigureKestrel(options => options.ListenLocalhost(mcpConfiguration.Http.Port));
+            builder.Services.AddWindowsService();
+
+            // 로깅은 Serilog로만 한다
             builder.Logging.ClearProviders();
             builder.Logging.Services.AddSerilog(configureLogger =>
             {
@@ -126,7 +133,7 @@ namespace Biz.Bizadm.PowerManager.DeviceConfig.Mcp
                     .WriteTo.Console(
                         Serilog.Events.LogEventLevel.Information,
                         CallerEnricherOutputTemplate.Default,
-                        standardErrorFromLevel: Serilog.Events.LogEventLevel.Verbose // stdout은 MCP 전용
+                        standardErrorFromLevel: Serilog.Events.LogEventLevel.Verbose
                     )
                     .WriteTo.File(
                         new DirectoryInfo(cmdMain.LogDirPath).FullName,
@@ -141,9 +148,12 @@ namespace Biz.Bizadm.PowerManager.DeviceConfig.Mcp
             builder.Services.AddSingleton(sp => HostWifiLoader.CreateForCurrentOs(sp.GetRequiredService<ILogger<DeviceConfigRunner>>()));
             builder.Services.AddSingleton(new DeviceConfigService.ServiceSettings(mcpConfiguration.ToOptions(wifiProfiles), wifiProfiles));
             builder.Services.AddSingleton<DeviceConfigService>();
-            builder.Services.AddMcpServer().WithStdioServerTransport().WithTools<DeviceConfigTools>();
+            // SDK 기본값(Stateless)을 쓴다. tool은 서버→클라이언트 요청을 쓰지 않고, 진행 알림은 요청의 응답 스트림으로 간다
+            builder.Services.AddMcpServer().WithHttpTransport().WithTools<DeviceConfigTools>();
 
-            return builder.Build();
+            WebApplication app = builder.Build();
+            app.MapMcp("/mcp");
+            return app;
         }
     }
 }

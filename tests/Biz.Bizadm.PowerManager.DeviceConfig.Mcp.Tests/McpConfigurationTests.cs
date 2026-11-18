@@ -15,6 +15,7 @@ namespace Biz.Bizadm.PowerManager.DeviceConfig.Mcp.Tests
                 CredentialAccount = "deviceconfig",
                 SecretsDekFilePath = "deviceconfig.dek",
             },
+            Http = new HttpSection { Port = 18460 },
             Device = new DeviceSection(),
             WifiProfiles = [],
             Settings = null,
@@ -92,6 +93,28 @@ namespace Biz.Bizadm.PowerManager.DeviceConfig.Mcp.Tests
 
             ArgumentException ex = Assert.ThrowsExactly<ArgumentException>(() => Validate(config));
             StringAssert.Contains(ex.Message, "OsKms is required");
+        }
+
+        [TestMethod]
+        public void Validate_HttpMissing_Throws()
+        {
+            McpConfiguration config = Valid();
+            config.Http = null!;
+
+            ArgumentException ex = Assert.ThrowsExactly<ArgumentException>(() => Validate(config));
+            StringAssert.Contains(ex.Message, "Http is required");
+        }
+
+        [TestMethod]
+        [DataRow(0)] // YAML에 Port가 없으면 0
+        [DataRow(65536)]
+        public void Validate_HttpPortOutOfRange_Throws(int port)
+        {
+            McpConfiguration config = Valid();
+            config.Http.Port = port;
+
+            ArgumentException ex = Assert.ThrowsExactly<ArgumentException>(() => Validate(config));
+            StringAssert.Contains(ex.Message, "Http.Port out of range");
         }
 
         [TestMethod]

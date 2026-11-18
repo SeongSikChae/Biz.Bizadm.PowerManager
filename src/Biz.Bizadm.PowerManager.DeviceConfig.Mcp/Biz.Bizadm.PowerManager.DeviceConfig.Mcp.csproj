@@ -14,6 +14,11 @@
     <HostWifiOs Condition="'$(HostWifiOs)' == '' And $([MSBuild]::IsOSPlatform('OSX'))">osx</HostWifiOs>
   </PropertyGroup>
 
+  <!-- MCP HTTP 전송(MapMcp)은 ASP.NET Core 라우팅·Kestrel을 쓴다. Microsoft.Extensions.Hosting은 공유 프레임워크가 제공한다 -->
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
   <ItemGroup>
     <PackageReference Include="Biz.Bizadm.KMS" />
     <PackageReference Include="Biz.Bizadm.KMS.Credentials" />
@@ -21,8 +26,8 @@
     <PackageReference Include="Biz.Bizadm.Serilog.Sinks.File.Extensions" />
     <PackageReference Include="Biz.Bizadm.System.Configuration.Extensions" />
     <PackageReference Include="CommandLineParser" />
-    <PackageReference Include="Microsoft.Extensions.Hosting" />
-    <PackageReference Include="ModelContextProtocol" />
+    <PackageReference Include="Microsoft.Extensions.Hosting.WindowsServices" />
+    <PackageReference Include="ModelContextProtocol.AspNetCore" />
     <PackageReference Include="Serilog.Extensions.Hosting" />
     <PackageReference Include="Serilog.Sinks.Console" />
     <PackageReference Include="YamlDotNet" />

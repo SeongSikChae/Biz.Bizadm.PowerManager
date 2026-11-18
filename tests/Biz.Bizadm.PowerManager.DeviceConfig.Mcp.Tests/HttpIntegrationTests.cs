@@ -1,24 +1,34 @@
+using ModelContextProtocol;
 using ModelContextProtocol.Client;
 using ModelContextProtocol.Protocol;
 using System.Diagnostics;
+using System.Net;
+using System.Net.Sockets;
 using System.Reflection;
+using System.Text;
 using System.Text.Json;
 
 namespace Biz.Bizadm.PowerManager.DeviceConfig.Mcp.Tests
 {
-    /// <summary>Mcp 프로젝트 출력 폴더의 exe를 stdio MCP 서버로 실행한다(설계 6절). PC Wi-Fi를 바꾸는 호출은 하지 않는다.</summary>
+    /// <summary>Mcp 프로젝트 출력 폴더의 exe를 HTTP MCP 서버로 띄우고 /mcp에 접속한다. PC Wi-Fi를 바꾸는 호출은 하지 않는다.</summary>
     [TestClass]
-    public sealed class StdioIntegrationTests
+    public sealed class HttpIntegrationTests
     {
         private static readonly string McpExePath = ResolveExePath();
 
+        private static readonly TimeSpan StartTimeout = TimeSpan.FromSeconds(30);
+
         private string workDir = null!;
+
+        private Process? server;
+
+        private readonly StringBuilder serverOutput = new();
 
         public TestContext TestContext { get; set; } = null!;
 
         private static string ResolveExePath()
         {
-            string path = typeof(StdioIntegrationTests).Assembly.GetCustomAttributes<AssemblyMetadataAttribute>()
+            string path = typeof(HttpIntegrationTests).Assembly.GetCustomAttributes<AssemblyMetadataAttribute>()
                 .Single(a => a.Key == "McpExePath").Value!;
             return Path.GetFullPath(OperatingSystem.IsWindows() ? path + ".exe" : path);
         }
@@ -33,6 +43,15 @@ namespace Biz.Bizadm.PowerManager.DeviceConfig.Mcp.Tests
         [TestCleanup]
         public void Cleanup()
         {
+            if (server is not null)
+            {
+                if (!server.HasExited)
+                {
+                    server.Kill(entireProcessTree: true);
+                    server.WaitForExit(10_000);
+                }
+                server.Dispose();
+            }
             try
             {
                 Directory.Delete(workDir, recursive: true);
@@ -45,8 +64,8 @@ namespace Biz.Bizadm.PowerManager.DeviceConfig.Mcp.Tests
 
         private string LogDir => Path.Combine(workDir, "log");
 
-        /// <summary>절대 경로 설정. WifiProfiles가 없어 KMS(자격 증명·DEK)를 쓰지 않는다.</summary>
-        private string WriteConfig(bool withOsKms = true)
+        /// <summary>절대 경로 설정. WifiProfiles가 없어 KMS(자격 증명·DEK)를 쓰지 않는다. port가 null이면 Http 섹션을 넣지 않는다.</summary>
+        private string WriteConfig(int? port, bool withOsKms = true)
         {
             string path = Path.Combine(workDir, "config.yaml");
             string osKms = withOsKms
@@ -58,17 +77,70 @@ namespace Biz.Bizadm.PowerManager.DeviceConfig.Mcp.Tests
 
                   """
                 : "";
-            File.WriteAllText(path, $"ContentRootPath: '{workDir}'\n{osKms}Device:\n  Port: 5000\n");
+            string http = port is int p ? $"Http:\n  Port: {p}\n" : "";
+            File.WriteAllText(path, $"ContentRootPath: '{workDir}'\n{osKms}{http}Device:\n  Port: 5000\n");
             return path;
         }
 
-        private Task<McpClient> StartClientAsync() =>
-            McpClient.CreateAsync(new StdioClientTransport(new StdioClientTransportOptions
+        private static int FreePort()
+        {
+            using TcpListener listener = new(IPAddress.Loopback, 0);
+            listener.Start();
+            return ((IPEndPoint)listener.LocalEndpoint).Port;
+        }
+
+        private Process StartExe(string configPath)
+        {
+            ProcessStartInfo psi = new(McpExePath)
             {
-                Name = "device-config",
-                Command = McpExePath,
-                Arguments = ["--config", WriteConfig(), "--log", LogDir],
-            }), cancellationToken: TestContext.CancellationToken);
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+            };
+            foreach (string arg in new[] { "--config", configPath, "--log", LogDir })
+                psi.ArgumentList.Add(arg);
+
+            Process process = new() { StartInfo = psi };
+            process.OutputDataReceived += (_, e) => { if (e.Data is not null) lock (serverOutput) serverOutput.AppendLine(e.Data); };
+            process.ErrorDataReceived += (_, e) => { if (e.Data is not null) lock (serverOutput) serverOutput.AppendLine(e.Data); };
+            process.Start();
+            process.BeginOutputReadLine();
+            process.BeginErrorReadLine();
+            server = process;
+            return process;
+        }
+
+        private string ServerOutput()
+        {
+            lock (serverOutput)
+                return serverOutput.ToString();
+        }
+
+        /// <summary>exe를 띄우고 /mcp에 접속될 때까지 재시도한다.</summary>
+        private async Task<McpClient> StartClientAsync()
+        {
+            int port = FreePort();
+            Process process = StartExe(WriteConfig(port));
+            Uri endpoint = new($"http://127.0.0.1:{port}/mcp");
+            Stopwatch elapsed = Stopwatch.StartNew();
+            while (true)
+            {
+                if (process.HasExited)
+                    Assert.Fail($"server exited with {process.ExitCode}:\n{ServerOutput()}");
+                try
+                {
+                    return await McpClient.CreateAsync(new HttpClientTransport(new HttpClientTransportOptions
+                    {
+                        Name = "device-config",
+                        Endpoint = endpoint,
+                    }), cancellationToken: TestContext.CancellationToken);
+                }
+                catch (Exception ex) when (ex is HttpRequestException or IOException or McpException && elapsed.Elapsed < StartTimeout)
+                {
+                    await Task.Delay(200, TestContext.CancellationToken);
+                }
+            }
+        }
 
         private static string[] Required(Tool tool) =>
             tool.InputSchema.TryGetProperty("required", out JsonElement required)
@@ -82,7 +154,7 @@ namespace Biz.Bizadm.PowerManager.DeviceConfig.Mcp.Tests
 
         /// <summary>null일 수 있는 출력 필드(미연결 어댑터의 currentSsid, 성공 시 error)는 required가 아니어야 한다(#8).</summary>
         [TestMethod]
-        public async Task Stdio_OutputSchema_NullableFieldsAreOptional()
+        public async Task Http_OutputSchema_NullableFieldsAreOptional()
         {
             await using McpClient client = await StartClientAsync();
             IList<McpClientTool> tools = await client.ListToolsAsync(cancellationToken: TestContext.CancellationToken);
@@ -100,7 +172,7 @@ namespace Biz.Bizadm.PowerManager.DeviceConfig.Mcp.Tests
         }
 
         [TestMethod]
-        public async Task Stdio_ListsFourTools_WithAnnotations()
+        public async Task Http_ListsFourTools_WithAnnotations()
         {
             await using McpClient client = await StartClientAsync();
 
@@ -131,7 +203,7 @@ namespace Biz.Bizadm.PowerManager.DeviceConfig.Mcp.Tests
         }
 
         [TestMethod]
-        public async Task Stdio_ListWifiProfiles_ReturnsEmptySsids()
+        public async Task Http_ListWifiProfiles_ReturnsEmptySsids()
         {
             await using McpClient client = await StartClientAsync();
 
@@ -144,7 +216,7 @@ namespace Biz.Bizadm.PowerManager.DeviceConfig.Mcp.Tests
         }
 
         [TestMethod]
-        public async Task Stdio_ScanUnknownAdapter_IsError()
+        public async Task Http_ScanUnknownAdapter_IsError()
         {
             await using McpClient client = await StartClientAsync();
 
@@ -160,7 +232,7 @@ namespace Biz.Bizadm.PowerManager.DeviceConfig.Mcp.Tests
         }
 
         [TestMethod]
-        public async Task Stdio_RunUnknownSettingsKey_ReturnsErrorWithKey()
+        public async Task Http_RunUnknownSettingsKey_ReturnsErrorWithKey()
         {
             await using McpClient client = await StartClientAsync();
 
@@ -181,36 +253,20 @@ namespace Biz.Bizadm.PowerManager.DeviceConfig.Mcp.Tests
                 content.GetProperty("error").GetString());
         }
 
-        [TestMethod]
-        public async Task Exe_InvalidConfig_ExitCode2()
+        private async Task AssertConfigurationErrorAsync(string configPath)
         {
-            ProcessStartInfo psi = new(McpExePath)
-            {
-                RedirectStandardInput = true,
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                UseShellExecute = false,
-            };
-            foreach (string arg in new[] { "--config", WriteConfig(withOsKms: false), "--log", LogDir })
-                psi.ArgumentList.Add(arg);
+            Process process = StartExe(configPath);
+            await process.WaitForExitAsync(TestContext.CancellationToken).WaitAsync(StartTimeout, TestContext.CancellationToken);
+            process.WaitForExit(); // 비동기 출력 읽기가 끝날 때까지 기다린다
 
-            using Process process = Process.Start(psi)!;
-            try
-            {
-                process.StandardInput.Close();
-                Task<string> stdout = process.StandardOutput.ReadToEndAsync(TestContext.CancellationToken);
-                Task<string> stderr = process.StandardError.ReadToEndAsync(TestContext.CancellationToken);
-                await process.WaitForExitAsync(TestContext.CancellationToken).WaitAsync(TimeSpan.FromSeconds(30), TestContext.CancellationToken);
-
-                Assert.AreEqual(2, process.ExitCode);
-                StringAssert.Contains(await stderr, "Configuration error");
-                Assert.AreEqual("", await stdout);
-            }
-            finally
-            {
-                if (!process.HasExited)
-                    process.Kill(entireProcessTree: true); // 시간 초과로 실패해도 서버 프로세스를 남기지 않는다
-            }
+            Assert.AreEqual(2, process.ExitCode);
+            StringAssert.Contains(ServerOutput(), "Configuration error");
         }
+
+        [TestMethod]
+        public Task Exe_InvalidConfig_ExitCode2() => AssertConfigurationErrorAsync(WriteConfig(FreePort(), withOsKms: false));
+
+        [TestMethod]
+        public Task Exe_MissingHttpPort_ExitCode2() => AssertConfigurationErrorAsync(WriteConfig(port: null));
     }
 }

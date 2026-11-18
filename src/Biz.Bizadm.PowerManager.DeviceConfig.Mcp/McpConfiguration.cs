@@ -16,6 +16,9 @@ namespace Biz.Bizadm.PowerManager.DeviceConfig.Mcp
 
         public OsKmsSection OsKms { get; set; } = null!;
 
+        /// <summary>MCP HTTP 서버. 루프백에만 바인딩한다.</summary>
+        public HttpSection Http { get; set; } = null!;
+
         public DeviceSection Device { get; set; } = new();
 
         public List<WifiProfileSection> WifiProfiles { get; set; } = [];
@@ -29,6 +32,11 @@ namespace Biz.Bizadm.PowerManager.DeviceConfig.Mcp
             ConfigurationValidator.Validate(OsKms);
             if (!Uri.TryCreate(OsKms.CredentialService, UriKind.Absolute, out _))
                 throw new ArgumentException($"OsKms.CredentialService must be an absolute URI: {OsKms.CredentialService}");
+
+            if (Http is null)
+                throw new ArgumentException("Http is required");
+            ConfigurationValidator.Validate(Http);
+            ValidatePort("Http.Port", Http.Port);
 
             Device ??= new DeviceSection();
             ConfigurationValidator.Validate(Device);
@@ -103,6 +111,13 @@ namespace Biz.Bizadm.PowerManager.DeviceConfig.Mcp
 
         [Property(PropertyType.STRING, required: true)]
         public string SecretsDekFilePath { get; set; } = null!;
+    }
+
+    internal sealed class HttpSection
+    {
+        /// <summary>필수, 기본값 없음. endpoint는 http://127.0.0.1:{Port}/mcp</summary>
+        [Property(PropertyType.INT, required: true)]
+        public int Port { get; set; }
     }
 
     internal sealed class DeviceSection
