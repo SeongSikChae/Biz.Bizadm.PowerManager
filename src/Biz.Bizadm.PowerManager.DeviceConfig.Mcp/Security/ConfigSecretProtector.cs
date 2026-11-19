@@ -24,8 +24,9 @@ namespace Biz.Bizadm.PowerManager.DeviceConfig.Mcp.Security
         /// <summary>설정 파일을 다시 써야 하는지(Salt 생성, 평문 암호화).</summary>
         public bool Rewrite { get; private set; }
 
-        /// <summary>보호할 값이 있는지. WifiProfiles가 비면 KMS(자격 증명·DEK 파일)를 건너뛴다.</summary>
-        public static bool HasSecrets(McpConfiguration config) => config.WifiProfiles.Count > 0;
+        /// <summary>보호할 값이 있는지. WifiProfiles와 Settings.MqttKey가 모두 없으면 KMS(자격 증명·DEK 파일)를 건너뛴다.</summary>
+        public static bool HasSecrets(McpConfiguration config) =>
+            config.WifiProfiles.Count > 0 || !string.IsNullOrEmpty(config.Settings?.MqttKey);
 
         /// <exception cref="InvalidOperationException">Salt가 비었는데 DEK 파일이 있다(기존 KEK를 덮어쓰지 않는다).</exception>
         public static ConfigSecretProtector Create(McpConfiguration config)
@@ -58,8 +59,10 @@ namespace Biz.Bizadm.PowerManager.DeviceConfig.Mcp.Security
             }
         }
 
-        /// <summary>평문 Pass를 암호화해 설정 객체에 반영하고, 복호화한 프로필을 돌려준다(YAML 모델에는 평문을 되돌려 넣지 않는다).</summary>
-        public IReadOnlyList<WifiProfile> Protect(McpConfiguration config)
+        /// <summary>
+        /// 평문 Pass·Settings.MqttKey를 암호화해 설정 객체에 반영하고, 복호화한 값을 돌려준다(YAML 모델에는 평문을 되돌려 넣지 않는다).
+        /// </summary>
+        public ProtectedSecrets Protect(McpConfiguration config)
         {
             List<WifiProfile> profiles = [];
             foreach (WifiProfileSection profile in config.WifiProfiles)
@@ -71,13 +74,37 @@ namespace Biz.Bizadm.PowerManager.DeviceConfig.Mcp.Security
                 }
                 profiles.Add(new WifiProfile(profile.Ssid, dek.Decrypt(profile.Pass)));
             }
-            return profiles;
+
+            string? mqttKey = null;
+            if (config.Settings is { MqttKey: { Length: > 0 } stored } settings)
+            {
+                if (!dek.StartsWithFromPrefix(stored))
+                {
+                    settings.MqttKey = dek.Encrypt(stored);
+                    Rewrite = true;
+                }
+                mqttKey = dek.Decrypt(settings.MqttKey!);
+            }
+            return new ProtectedSecrets(profiles, mqttKey);
         }
 
         public void Dispose()
         {
             dek.Dispose();
             manager.Dispose();
+        }
+    }
+
+    /// <summary>복호화한 보안값. MqttKey는 Settings.MqttKey가 없으면 null이다.</summary>
+    internal sealed record ProtectedSecrets(IReadOnlyList<WifiProfile> WifiProfiles, string? MqttKey)
+    {
+        public static readonly ProtectedSecrets Empty = new([], null);
+
+        // record 기본 ToString이 복호화 값을 내지 않도록 가린다
+        private bool PrintMembers(System.Text.StringBuilder builder)
+        {
+            builder.Append($"WifiProfiles = {WifiProfiles.Count}, MqttKey = {(MqttKey is null ? "null" : "***")}");
+            return true;
         }
     }
 }

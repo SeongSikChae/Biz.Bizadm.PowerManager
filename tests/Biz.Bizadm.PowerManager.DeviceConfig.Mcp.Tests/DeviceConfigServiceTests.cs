@@ -466,6 +466,92 @@ namespace Biz.Bizadm.PowerManager.DeviceConfig.Mcp.Tests
         }
 
         [TestMethod]
+        public async Task Run_ConnectAp_ProtocolOverride_V2_SendsDelay()
+        {
+            await using MockDevice device = new(Respond);
+
+            DeviceConfigService.RunResult result = await Service(new FakeHostWifi(), ServiceSettings(device))
+                .RunAsync(AdapterId, DeviceAp, ["ConnectAp"], "MyRouter", new() { Protocol = "V2" }, null, TestContext.CancellationToken);
+
+            Assert.IsTrue(result.Success, result.Error);
+            string[] lines = device.Received.Select(r => r.Line).ToArray();
+            Assert.AreEqual("{\"delay\":\"0\"}", lines[^1]);
+            Assert.IsFalse(lines.Any(l => l.Contains("connectap")));
+        }
+
+        [TestMethod]
+        [DataRow("v2")]
+        [DataRow("V9")]
+        public async Task Run_ConnectAp_ProtocolInvalid_FailsBeforeWifi(string protocol)
+        {
+            await using MockDevice device = new(Respond);
+            FakeHostWifi hostWifi = new();
+
+            DeviceConfigService.RunResult result = await Service(hostWifi, ServiceSettings(device))
+                .RunAsync(AdapterId, DeviceAp, ["ConnectAp"], "MyRouter", new() { Protocol = protocol }, null, TestContext.CancellationToken);
+
+            Assert.AreEqual($"ArgumentException: settings.protocol must be one of V1, V2, V3, V4: {protocol}", result.Error);
+            Assert.IsEmpty(hostWifi.Calls);
+        }
+
+        [TestMethod]
+        public async Task Run_ConnectAp_V1FromFileWithoutMqttKey_NoOverride_FailsBeforeWifi()
+        {
+            await using MockDevice device = new(Respond);
+            FakeHostWifi hostWifi = new();
+
+            DeviceConfigService.RunResult result = await Service(hostWifi, ServiceSettings(device, settings: Settings with { Protocol = DeviceProtocol.V1 }))
+                .RunAsync(AdapterId, DeviceAp, ["ConnectAp"], "MyRouter", null, null, TestContext.CancellationToken);
+
+            Assert.AreEqual("ArgumentException: ConnectAp with protocol V1 requires Settings.MqttKey in the config file", result.Error);
+            Assert.IsEmpty(hostWifi.Calls);
+        }
+
+        [TestMethod]
+        public async Task Run_ConnectAp_V1ByOverrideWithoutMqttKey_FailsBeforeWifi()
+        {
+            await using MockDevice device = new(Respond);
+            FakeHostWifi hostWifi = new();
+
+            DeviceConfigService.RunResult result = await Service(hostWifi, ServiceSettings(device))
+                .RunAsync(AdapterId, DeviceAp, ["ConnectAp"], "MyRouter", new() { Protocol = "V1" }, null, TestContext.CancellationToken);
+
+            Assert.AreEqual("ArgumentException: ConnectAp with protocol V1 requires Settings.MqttKey in the config file", result.Error);
+            Assert.IsEmpty(hostWifi.Calls);
+        }
+
+        [TestMethod]
+        public async Task Run_ConnectAp_V1WithFileMqttKey_SendsV1Json()
+        {
+            await using MockDevice device = new(Respond);
+            ListLogger<DeviceConfigRunner> logger = new();
+
+            DeviceConfigService.RunResult result = await Service(new FakeHostWifi(),
+                    ServiceSettings(device, settings: Settings with { Protocol = DeviceProtocol.V1, MqttKey = "file-mqtt-key-01" }), logger)
+                .RunAsync(AdapterId, DeviceAp, ["ConnectAp"], "MyRouter", null, null, TestContext.CancellationToken);
+
+            Assert.IsTrue(result.Success, result.Error);
+            using JsonDocument settings = JsonDocument.Parse(SettingsLine(device));
+            Assert.AreEqual("file-mqtt-key-01", settings.RootElement.GetProperty("mqtt_key").GetString());
+            Assert.IsFalse(logger.AllText.Contains("file-mqtt-key-01"), "mqtt_key in log");
+        }
+
+        [TestMethod]
+        public async Task Run_MqttKeyArgument_RejectedAsUnknownKey()
+        {
+            await using MockDevice device = new(Respond);
+            FakeHostWifi hostWifi = new();
+            DeviceConfigService.SettingsOverride o = JsonSerializer.Deserialize<DeviceConfigService.SettingsOverride>(
+                """{"mqttKey":"x","protocol":"V1"}""", McpJsonUtilities.DefaultOptions)!;
+
+            DeviceConfigService.RunResult result = await Service(hostWifi, ServiceSettings(device))
+                .RunAsync(AdapterId, DeviceAp, ["ConnectAp"], "MyRouter", o, null, TestContext.CancellationToken);
+
+            StringAssert.StartsWith(result.Error, "ArgumentException: Unknown settings keys: mqttKey");
+            Assert.IsEmpty(hostWifi.Calls);
+        }
+
+        [TestMethod]
         public void SettingsOverride_Deserialize_CamelCase()
         {
             DeviceConfigService.SettingsOverride? o = JsonSerializer.Deserialize<DeviceConfigService.SettingsOverride>(

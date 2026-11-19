@@ -13,6 +13,7 @@ namespace Biz.Bizadm.PowerManager.DeviceConfig.Tests.Protocol
             Assert.AreEqual("[DUT<-PC] SCAN_AP\n", DeviceMessages.Test("SCAN_AP"));
             Assert.AreEqual("{\"command\":\"apscan\"}\n", DeviceMessages.Command("apscan"));
             Assert.AreEqual("{\"mac\":\"a1b2c3d4e5f6\",\"command\":\"connectap\"}\n", DeviceMessages.ConnectAp("a1b2c3d4e5f6"));
+            Assert.AreEqual("{\"delay\":\"0\"}\n", DeviceMessages.Delay);
         }
     }
 }

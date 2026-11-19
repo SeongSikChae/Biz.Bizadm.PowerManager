@@ -56,10 +56,10 @@ namespace Biz.Bizadm.PowerManager.DeviceConfig.Mcp
                 return ExitCode.ConfigurationError;
             }
 
-            IReadOnlyList<WifiProfile> wifiProfiles;
+            ProtectedSecrets secrets;
             try
             {
-                wifiProfiles = ProtectSecrets(cmdMain.ConfigFilePath, mcpConfiguration);
+                secrets = ProtectSecrets(cmdMain.ConfigFilePath, mcpConfiguration);
             }
             catch (Exception ex)
             {
@@ -70,7 +70,7 @@ namespace Biz.Bizadm.PowerManager.DeviceConfig.Mcp
             WebApplication host;
             try
             {
-                host = CreateHostApplication(args, cmdMain, mcpConfiguration, wifiProfiles);
+                host = CreateHostApplication(args, cmdMain, mcpConfiguration, secrets);
             }
             catch (Exception ex)
             {
@@ -96,12 +96,12 @@ namespace Biz.Bizadm.PowerManager.DeviceConfig.Mcp
             }
         }
 
-        private static IReadOnlyList<WifiProfile> ProtectSecrets(string configFilePath, McpConfiguration mcpConfiguration)
+        private static ProtectedSecrets ProtectSecrets(string configFilePath, McpConfiguration mcpConfiguration)
         {
             if (!ConfigSecretProtector.HasSecrets(mcpConfiguration))
-                return [];
+                return ProtectedSecrets.Empty;
             using ConfigSecretProtector protector = ConfigSecretProtector.Create(mcpConfiguration);
-            IReadOnlyList<WifiProfile> profiles = protector.Protect(mcpConfiguration);
+            ProtectedSecrets profiles = protector.Protect(mcpConfiguration);
             if (protector.Rewrite)
             {
                 YamlDotNet.Serialization.Serializer serializer = new();
@@ -111,7 +111,7 @@ namespace Biz.Bizadm.PowerManager.DeviceConfig.Mcp
             return profiles;
         }
 
-        private static WebApplication CreateHostApplication(string[] args, CmdMain cmdMain, McpConfiguration mcpConfiguration, IReadOnlyList<WifiProfile> wifiProfiles)
+        private static WebApplication CreateHostApplication(string[] args, CmdMain cmdMain, McpConfiguration mcpConfiguration, ProtectedSecrets secrets)
         {
             WebApplicationBuilder builder = WebApplication.CreateBuilder(new WebApplicationOptions
             {
@@ -146,7 +146,8 @@ namespace Biz.Bizadm.PowerManager.DeviceConfig.Mcp
             });
 
             builder.Services.AddSingleton(sp => HostWifiLoader.CreateForCurrentOs(sp.GetRequiredService<ILogger<DeviceConfigRunner>>()));
-            builder.Services.AddSingleton(new DeviceConfigService.ServiceSettings(mcpConfiguration.ToOptions(wifiProfiles), wifiProfiles));
+            builder.Services.AddSingleton(new DeviceConfigService.ServiceSettings(
+                mcpConfiguration.ToOptions(secrets.WifiProfiles, secrets.MqttKey), secrets.WifiProfiles));
             builder.Services.AddSingleton<DeviceConfigService>();
             // SDK 기본값(Stateless)을 쓴다. tool은 서버→클라이언트 요청을 쓰지 않고, 진행 알림은 요청의 응답 스트림으로 간다
             builder.Services.AddMcpServer().WithHttpTransport().WithTools<DeviceConfigTools>();

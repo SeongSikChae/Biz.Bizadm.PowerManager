@@ -159,6 +159,139 @@ namespace Biz.Bizadm.PowerManager.DeviceConfig.Tests.Transport
             }
         }
 
+        private const string MqttKey = "KEY+0123456789&b";
+        private static readonly string EscapedMqttKey = JsonSerializer.Serialize(MqttKey)[1..^1];
+        private static readonly DeviceSettings V1Settings = Settings with { Protocol = DeviceProtocol.V1, MqttKey = MqttKey };
+
+        private static string[] Lines(MockDevice device) => device.Received.Select(r => r.Line).ToArray();
+
+        private static void AssertNoSecrets(params string[] texts)
+        {
+            foreach (string text in texts)
+            {
+                Assert.IsFalse(text.Contains(Pass), "pass leaked");
+                Assert.IsFalse(text.Contains(EscapedPass), "escaped pass leaked");
+                Assert.IsFalse(text.Contains(MqttKey), "mqtt_key leaked");
+                Assert.IsFalse(text.Contains(EscapedMqttKey), "escaped mqtt_key leaked");
+            }
+        }
+
+        [TestMethod]
+        [DataRow(true)]
+        [DataRow(false)]
+        public async Task ConnectApAsync_V1_SendsV1JsonOnlyAndCloses(bool deviceResponds)
+        {
+            await using MockDevice device = new(line => line.Contains("\"pass\"") && !deviceResponds ? null : Default(line));
+            ListLogger logger = new();
+
+            await Client(device, logger).ConnectApAsync(SelectMyRouter, V1Settings, TestContext.CancellationToken);
+
+            string[] lines = Lines(device);
+            Assert.AreEqual(4, lines.Length);
+            Assert.AreEqual("{\"command\":\"apscan\"}", lines[2]);
+            using JsonDocument settings = JsonDocument.Parse(lines[3]);
+            Assert.AreEqual(MqttKey, settings.RootElement.GetProperty("mqtt_key").GetString());
+            Assert.IsFalse(settings.RootElement.TryGetProperty("mac", out _), "V1 JSON has no mac");
+            Assert.IsFalse(lines.Any(l => l.Contains("connectap")), "V1 sends no connectap");
+            AssertNoSecrets(logger.AllText);
+        }
+
+        [TestMethod]
+        public async Task ConnectApAsync_V1WithoutMqttKey_ThrowsBeforeConnecting()
+        {
+            await using MockDevice device = new(Default);
+
+            await Assert.ThrowsExactlyAsync<InvalidOperationException>(
+                () => Client(device, new ListLogger()).ConnectApAsync(SelectMyRouter, V1Settings with { MqttKey = "" }, TestContext.CancellationToken));
+
+            Assert.AreEqual(0, device.ConnectionCount);
+        }
+
+        [TestMethod]
+        [DataRow(true)]
+        [DataRow(false)]
+        public async Task ConnectApAsync_V2_ReadsOneResponseThenSendsDelay(bool settingsOk)
+        {
+            await using MockDevice device = new(line =>
+                line.Contains("\"pass\"") ? (settingsOk ? Ok : Ok.Replace("OK", "FAIL"))
+                : line == "{\"delay\":\"0\"}" ? Ok
+                : Default(line));
+            ListLogger logger = new();
+
+            await Client(device, logger).ConnectApAsync(SelectMyRouter, Settings with { Protocol = DeviceProtocol.V2 }, TestContext.CancellationToken);
+
+            string[] lines = Lines(device);
+            Assert.AreEqual(5, lines.Length);
+            StringAssert.Contains(lines[3], "\"pass\"");
+            Assert.AreEqual("{\"delay\":\"0\"}", lines[4]);
+            Assert.IsFalse(lines.Any(l => l.Contains("connectap")), "V2 sends no connectap");
+            AssertNoSecrets(logger.AllText);
+        }
+
+        [TestMethod]
+        public async Task ConnectApAsync_V2_NoSettingsResponse_Throws()
+        {
+            await using MockDevice device = new(line => line.Contains("\"pass\"") ? null : Default(line));
+            ListLogger logger = new();
+
+            TimeoutException ex = await Assert.ThrowsExactlyAsync<TimeoutException>(
+                () => Client(device, logger).ConnectApAsync(SelectMyRouter, Settings with { Protocol = DeviceProtocol.V2 }, TestContext.CancellationToken));
+
+            Assert.IsFalse(Lines(device).Contains("{\"delay\":\"0\"}"));
+            AssertNoSecrets(ex.ToString(), logger.AllText);
+        }
+
+        [TestMethod]
+        [DataRow(true)]
+        [DataRow(false)]
+        public async Task ConnectApAsync_V4_SendsSettingsAndConnectApWithoutWaiting(bool deviceResponds)
+        {
+            await using MockDevice device = new(line =>
+                (line.Contains("\"pass\"") || line.Contains("connectap")) && !deviceResponds ? null : Default(line));
+            ListLogger logger = new();
+
+            await Client(device, logger).ConnectApAsync(SelectMyRouter, Settings with { Protocol = DeviceProtocol.V4 }, TestContext.CancellationToken);
+
+            string[] lines = Lines(device);
+            Assert.AreEqual(5, lines.Length);
+            StringAssert.Contains(lines[3], "\"pass\"");
+            Assert.AreEqual("{\"mac\":\"" + MockDevice.Mac + "\",\"command\":\"connectap\"}", lines[4]);
+            AssertNoSecrets(logger.AllText);
+        }
+
+        [TestMethod]
+        [DataRow(0)]
+        [DataRow(1)]
+        [DataRow(2)]
+        public async Task ConnectApAsync_V4_SkipsFramesBeforeStartOk(int extraFrames)
+        {
+            string hello = string.Concat(Enumerable.Repeat("[DUT->PC] READY#", extraFrames)) + MockDevice.StartOk;
+            await using MockDevice device = new(Default, hello);
+
+            await Client(device, new ListLogger()).ConnectApAsync(SelectMyRouter, Settings with { Protocol = DeviceProtocol.V4 }, TestContext.CancellationToken);
+
+            Assert.AreEqual("{\"mac\":\"" + MockDevice.Mac + "\",\"command\":\"connectap\"}", Lines(device)[^1]);
+        }
+
+        [TestMethod]
+        public async Task ConnectApAsync_V4_ThreeFramesBeforeStartOk_Throws()
+        {
+            string hello = string.Concat(Enumerable.Repeat("[DUT->PC] READY#", 3)) + MockDevice.StartOk;
+            await using MockDevice device = new(Default, hello);
+
+            await Assert.ThrowsExactlyAsync<DeviceProtocolException>(
+                () => Client(device, new ListLogger()).ConnectApAsync(SelectMyRouter, Settings with { Protocol = DeviceProtocol.V4 }, TestContext.CancellationToken));
+        }
+
+        [TestMethod]
+        public async Task ConnectApAsync_V3_DoesNotSkipFramesBeforeStartOk()
+        {
+            await using MockDevice device = new(Default, "[DUT->PC] READY#" + MockDevice.StartOk);
+
+            await Assert.ThrowsExactlyAsync<DeviceProtocolException>(
+                () => Client(device, new ListLogger()).ConnectApAsync(SelectMyRouter, Settings, TestContext.CancellationToken));
+        }
+
         [TestMethod]
         public async Task ConnectApAsync_NotOk_Throws()
         {

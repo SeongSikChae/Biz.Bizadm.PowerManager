@@ -49,10 +49,10 @@ namespace Biz.Bizadm.PowerManager.DeviceConfig.App
                 return ExitCode.ConfigurationError;
             }
 
-            IReadOnlyList<WifiProfile> wifiProfiles;
+            ProtectedSecrets secrets;
             try
             {
-                wifiProfiles = ProtectSecrets(cmdMain.ConfigFilePath, appConfiguration);
+                secrets = ProtectSecrets(cmdMain.ConfigFilePath, appConfiguration);
             }
             catch (Exception ex)
             {
@@ -63,7 +63,7 @@ namespace Biz.Bizadm.PowerManager.DeviceConfig.App
             IHost host;
             try
             {
-                host = CreateHostApplication(args, cmdMain, appConfiguration, wifiProfiles);
+                host = CreateHostApplication(args, cmdMain, appConfiguration, secrets);
             }
             catch (Exception ex)
             {
@@ -91,12 +91,12 @@ namespace Biz.Bizadm.PowerManager.DeviceConfig.App
             }
         }
 
-        private static IReadOnlyList<WifiProfile> ProtectSecrets(string configFilePath, AppConfiguration appConfiguration)
+        private static ProtectedSecrets ProtectSecrets(string configFilePath, AppConfiguration appConfiguration)
         {
             if (!ConfigSecretProtector.HasSecrets(appConfiguration))
-                return [];
+                return ProtectedSecrets.Empty;
             using ConfigSecretProtector protector = ConfigSecretProtector.Create(appConfiguration);
-            IReadOnlyList<WifiProfile> profiles = protector.Protect(appConfiguration);
+            ProtectedSecrets profiles = protector.Protect(appConfiguration);
             if (protector.Rewrite)
             {
                 YamlDotNet.Serialization.Serializer serializer = new();
@@ -106,7 +106,8 @@ namespace Biz.Bizadm.PowerManager.DeviceConfig.App
             return profiles;
         }
 
-        private static DeviceConfigOptions CreateOptions(AppConfiguration config, IReadOnlyList<WifiProfile> wifiProfiles) => new()
+        /// <summary>secrets는 ConfigSecretProtector가 복호화한 값이다. YAML 모델의 Settings.MqttKey(기동 후 암호문)는 쓰지 않는다.</summary>
+        private static DeviceConfigOptions CreateOptions(AppConfiguration config, ProtectedSecrets secrets) => new()
         {
             Host = config.Device.Host,
             Port = config.Device.Port,
@@ -114,7 +115,7 @@ namespace Biz.Bizadm.PowerManager.DeviceConfig.App
             ApPrefix = config.Device.ApPrefix,
             ApConnectTimeout = TimeSpan.FromSeconds(config.Device.ApConnectTimeoutSeconds),
             Commands = config.Commands,
-            WifiProfiles = wifiProfiles,
+            WifiProfiles = secrets.WifiProfiles,
             Settings = config.Settings is not { } s ? null : new DeviceSettings
             {
                 ApiServerAddr = s.ApiServerAddr,
@@ -128,10 +129,12 @@ namespace Biz.Bizadm.PowerManager.DeviceConfig.App
                 Lati = s.Lati,
                 Long = s.Long,
                 Topic = s.Topic,
+                Protocol = DeviceProtocols.TryParse(s.Protocol, out DeviceProtocol protocol) ? protocol : DeviceProtocol.V3,
+                MqttKey = secrets.MqttKey,
             },
         };
 
-        private static IHost CreateHostApplication(string[] args, CmdMain cmdMain, AppConfiguration appConfiguration, IReadOnlyList<WifiProfile> wifiProfiles)
+        private static IHost CreateHostApplication(string[] args, CmdMain cmdMain, AppConfiguration appConfiguration, ProtectedSecrets secrets)
         {
             HostApplicationBuilder builder = Host.CreateApplicationBuilder(new HostApplicationBuilderSettings
             {
@@ -158,7 +161,7 @@ namespace Biz.Bizadm.PowerManager.DeviceConfig.App
                     );
             });
 
-            builder.Services.AddSingleton(CreateOptions(appConfiguration, wifiProfiles));
+            builder.Services.AddSingleton(CreateOptions(appConfiguration, secrets));
             builder.Services.AddSingleton<IDeviceConfigSelector, ConsoleDeviceConfigSelector>();
             builder.Services.AddSingleton(sp => HostWifiLoader.CreateForCurrentOs(sp.GetRequiredService<ILogger<DeviceConfigRunner>>()));
             builder.Services.AddSingleton<DeviceConfigRunner>();

@@ -75,6 +75,24 @@ namespace Biz.Bizadm.PowerManager.DeviceConfig.Tests
         }
 
         [TestMethod]
+        public async Task Run_V1WithoutMqttKey_FailsBeforeWifi()
+        {
+            await using MockDevice device = new(Respond);
+            FakeHostWifi hostWifi = new();
+            DeviceConfigOptions options = Options(device, UnreachableHost, DeviceCommand.ConnectAp) with
+            {
+                Settings = Settings with { Protocol = DeviceProtocol.V1, MqttKey = null },
+            };
+
+            InvalidOperationException ex = await Assert.ThrowsExactlyAsync<InvalidOperationException>(
+                () => Runner(hostWifi, new FakeSelector(), options, new()).RunAsync(TestContext.CancellationToken));
+
+            StringAssert.Contains(ex.Message, "MqttKey");
+            Assert.IsNull(hostWifi.Connected, "PC Wi-Fi must not switch to the device AP");
+            Assert.AreEqual(0, device.ConnectionCount);
+        }
+
+        [TestMethod]
         public async Task Run_NotImplemented_FallsBackToHost_NoRestore()
         {
             await using MockDevice device = new(Respond);

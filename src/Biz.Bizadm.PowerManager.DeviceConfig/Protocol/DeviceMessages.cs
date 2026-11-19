@@ -13,5 +13,8 @@ namespace Biz.Bizadm.PowerManager.DeviceConfig.Protocol
         public static string Command(string name) => $"{{\"command\":\"{name}\"}}\n";
 
         public static string ConnectAp(string mac) => $"{{\"mac\":\"{mac}\",\"command\":\"connectap\"}}\n";
+
+        /// <summary>V2 흐름에서 설정 응답 뒤에 보내는 메시지(참고 구현 DelayMessage).</summary>
+        public const string Delay = "{\"delay\":\"0\"}\n";
     }
 }

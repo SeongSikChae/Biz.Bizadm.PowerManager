@@ -18,7 +18,20 @@ WifiProfiles:                            # 선택. ConnectAp에 필요
   - Ssid: MyRouter
     Pass: plain                          # 기동 시 DEKENC:... 로 암호화해 다시 기록
 Settings:                                # 선택. ConnectAp 기본값
+  Protocol: V3                           # 선택. ConnectAp 흐름 V1|V2|V3|V4(대소문자 구분, 기본 V3)
+  MqttKey: plain                         # V1일 때 필요. 기동 시 DEKENC:... 로 암호화해 다시 기록
 ```
+
+ConnectAp 흐름(참고 구현 PowerManagerConfig의 Configrator 버전):
+
+| `Protocol` | 대상(참고 구현 주석) | 장치 송수신(핸드셰이크·`apscan` 뒤) |
+|---|---|---|
+| `V1` | M130, B540 V1.0.26 | `mqtt_key`가 든 구형 설정 JSON만 보내고 닫음 |
+| `V2` | B540 v1.0.28 | 설정 JSON → 응답 1개 → `{"delay":"0"}` → 닫음 |
+| `V3`(기본) | B540 v1.0.30·v1.0.32 | 설정 JSON → `OK` → `connectap` → `OK` |
+| `V4` | B550 v1.0.10 | 핸드셰이크에서 `START_OK` 앞 프레임 최대 2개 건너뜀, 설정 JSON → `connectap`(응답을 기다리지 않음) → 닫음 |
+
+`run_device_commands`의 `settings.protocol`로 장치마다 흐름을 바꿀 수 있다. `MqttKey`는 tool 인자로 받지 않으며, 설정 파일에 없는데 V1로 `ConnectAp`를 보내면 PC Wi-Fi를 바꾸기 전에 오류가 난다.
 
 MCP endpoint: `http://127.0.0.1:<Http.Port>/mcp`
 

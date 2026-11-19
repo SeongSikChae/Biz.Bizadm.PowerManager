@@ -14,16 +14,20 @@ namespace Biz.Bizadm.PowerManager.DeviceConfig.Tests.TestSupport
     {
         public const string Mac = "a1b2c3d4e5f6";
         public const string Close = "\0close";
+        public const string StartOk = "[DUT->PC] START_OK:" + Mac + "#";
 
         private readonly TcpListener listener;
         private readonly Func<string, string?> respond;
+        private readonly string helloResponse;
         private readonly CancellationTokenSource stop = new();
         private readonly Task acceptLoop;
         private int connectionCount;
 
-        public MockDevice(Func<string, string?> respond)
+        /// <param name="helloResponse">hello에 보낼 응답(기본 START_OK 한 프레임). V4처럼 START_OK 앞에 다른 프레임을 붙여 시험한다.</param>
+        public MockDevice(Func<string, string?> respond, string? helloResponse = null)
         {
             this.respond = respond;
+            this.helloResponse = helloResponse ?? StartOk;
             listener = new TcpListener(IPAddress.Loopback, 0);
             listener.Start();
             acceptLoop = AcceptLoopAsync();
@@ -81,7 +85,7 @@ namespace Biz.Bizadm.PowerManager.DeviceConfig.Tests.TestSupport
                             string? response = line switch
                             {
                                 "[DUT<-PC] START" => null,
-                                "hello tcp SUCCESS_CONNECT" => $"[DUT->PC] START_OK:{Mac}#",
+                                "hello tcp SUCCESS_CONNECT" => helloResponse,
                                 _ => respond(line),
                             };
                             if (response == Close)

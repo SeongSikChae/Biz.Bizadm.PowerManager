@@ -196,7 +196,7 @@ namespace Biz.Bizadm.PowerManager.DeviceConfig.Mcp.Tests
             CollectionAssert.AreEquivalent(new[] { "adapterId", "deviceApSsid", "commands" }, Required(run)); // wifiSsid·settings는 비필수
             JsonElement settings = properties.GetProperty("settings"); // #9: 필드 모두 선택, camelCase
             CollectionAssert.AreEquivalent(
-                new[] { "apiServerAddr", "apiServerPort", "serverAddr", "serverPort", "sslSupport", "userId", "company", "model", "lati", "long", "topic" },
+                new[] { "apiServerAddr", "apiServerPort", "serverAddr", "serverPort", "sslSupport", "userId", "company", "model", "lati", "long", "topic", "protocol" },
                 settings.GetProperty("properties").EnumerateObject().Select(p => p.Name).ToArray());
             Assert.IsEmpty(Required(settings));
             CollectionAssert.AreEquivalent(new[] { "adapterId" }, Required(tools.Single(t => t.Name == "scan_device_aps").ProtocolTool));

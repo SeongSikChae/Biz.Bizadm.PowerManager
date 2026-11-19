@@ -86,6 +86,58 @@ namespace Biz.Bizadm.PowerManager.DeviceConfig.Mcp.Tests
         }
 
         [TestMethod]
+        [DataRow("v3")]
+        [DataRow("V5")]
+        [DataRow("")]
+        public void Validate_ProtocolInvalid_Throws(string protocol)
+        {
+            McpConfiguration config = Valid();
+            config.Settings = Settings();
+            config.Settings.Protocol = protocol;
+
+            ArgumentException ex = Assert.ThrowsExactly<ArgumentException>(() => Validate(config));
+            StringAssert.Contains(ex.Message, "Settings.Protocol must be one of V1, V2, V3, V4");
+        }
+
+        [TestMethod]
+        public void Validate_V1WithoutMqttKey_Ok()
+        {
+            McpConfiguration config = Valid();
+            config.Settings = Settings();
+            config.Settings.Protocol = "V1";
+
+            Validate(config); // 기동은 막지 않는다. ConnectAp 호출 때 ResolveSettings가 막는다(#13 C3)
+
+            Assert.IsNull(config.Settings.MqttKey);
+        }
+
+        [TestMethod]
+        public void ToOptions_ProtocolAndDecryptedMqttKey()
+        {
+            McpConfiguration config = Valid();
+            config.Settings = Settings();
+            config.Settings.Protocol = "V1";
+            config.Settings.MqttKey = "DEKENC:ciphertext"; // 기동 후 YAML 모델에는 암호문이 남는다
+
+            DeviceConfigOptions options = config.ToOptions([], "decrypted-key");
+
+            Assert.AreEqual(Protocol.DeviceProtocol.V1, options.Settings!.Protocol);
+            Assert.AreEqual("decrypted-key", options.Settings.MqttKey);
+        }
+
+        [TestMethod]
+        public void Settings_ProtocolDefaultsToV3()
+        {
+            McpConfiguration config = Valid();
+            config.Settings = Settings();
+
+            Validate(config);
+
+            Assert.AreEqual("V3", config.Settings.Protocol);
+            Assert.AreEqual(Protocol.DeviceProtocol.V3, config.ToOptions([], null).Settings!.Protocol);
+        }
+
+        [TestMethod]
         public void Validate_OsKmsMissing_Throws()
         {
             McpConfiguration config = Valid();
@@ -127,7 +179,7 @@ namespace Biz.Bizadm.PowerManager.DeviceConfig.Mcp.Tests
             config.Settings.Long = "127.0";
             WifiProfile[] profiles = [new WifiProfile("MyRouter", "secret")];
 
-            DeviceConfigOptions options = config.ToOptions(profiles);
+            DeviceConfigOptions options = config.ToOptions(profiles, null);
 
             Assert.AreEqual("10.0.0.1", options.Host);
             Assert.AreEqual(6000, options.Port);

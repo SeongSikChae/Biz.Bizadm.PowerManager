@@ -1,3 +1,4 @@
+using Biz.Bizadm.PowerManager.DeviceConfig.Protocol;
 using Biz.Bizadm.PowerManager.DeviceConfig.Transport;
 using System.Configuration;
 using System.Configuration.Annotation;
@@ -58,6 +59,11 @@ namespace Biz.Bizadm.PowerManager.DeviceConfig.App
             ConfigurationValidator.Validate(Settings);
             ValidatePort("Settings.ApiServerPort", Settings.ApiServerPort);
             ValidatePort("Settings.ServerPort", Settings.ServerPort);
+            if (!DeviceProtocols.TryParse(Settings.Protocol, out DeviceProtocol protocol))
+                throw new ArgumentException($"Settings.Protocol must be one of V1, V2, V3, V4: {Settings.Protocol}");
+            // App은 기동 시 막는다(#13 C3). PC Wi-Fi를 바꾸기 전이다
+            if (protocol == DeviceProtocol.V1 && string.IsNullOrEmpty(Settings.MqttKey))
+                throw new ArgumentException("Settings.MqttKey is required for Protocol V1");
         }
 
         private static void ValidatePort(string name, int port)
@@ -151,5 +157,13 @@ namespace Biz.Bizadm.PowerManager.DeviceConfig.App
 
         [Property(PropertyType.STRING, required: false)]
         public string Topic { get; set; } = "dwd";
+
+        /// <summary>ConnectAp 흐름 V1|V2|V3|V4(대소문자 구분, 기본 V3).</summary>
+        [Property(PropertyType.STRING, required: false)]
+        public string Protocol { get; set; } = "V3";
+
+        /// <summary>V1 설정 JSON의 mqtt_key. V1일 때 필수. 기동 시 OsKms로 암호화(DEKENC:)해 설정 파일에 다시 쓴다.</summary>
+        [Property(PropertyType.STRING, required: false)]
+        public string? MqttKey { get; set; }
     }
 }

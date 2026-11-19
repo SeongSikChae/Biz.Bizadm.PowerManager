@@ -28,21 +28,55 @@ namespace Biz.Bizadm.PowerManager.DeviceConfig.Transport
             };
         }
 
-        /// <summary>한 연결에서 apscan → Wi-Fi 선택 → 설정 JSON → connectap.</summary>
+        /// <summary>
+        /// 한 연결에서 핸드셰이크 → apscan → Wi-Fi 선택 → 설정 JSON → 흐름(settings.Protocol)별 마무리(#13).
+        /// V1: 설정 송신 후 정상 종료 / V2: 설정 → 응답 1개(검사 없음) → {"delay":"0"} → 정상 종료 /
+        /// V3: 설정 → OK → connectap → OK / V4: 핸드셰이크에서 START_OK 앞 프레임 최대 2개 건너뜀, 설정 → connectap → 정상 종료.
+        /// </summary>
+        /// <exception cref="InvalidOperationException">V1인데 MqttKey가 비었다(장치에 접속하기 전에 던진다).</exception>
         public async Task ConnectApAsync(
             Func<IReadOnlyList<WifiNetwork>, CancellationToken, Task<(string Ssid, string Pass)>> selectWifi,
             DeviceSettings settings,
             CancellationToken cancellationToken)
         {
+            if (settings.Protocol == DeviceProtocol.V1 && string.IsNullOrEmpty(settings.MqttKey))
+                throw new InvalidOperationException("MqttKey is required for Protocol V1");
+
             await using DeviceConnection connection = await DeviceConnection.OpenAsync(host, port, timeout, logger, cancellationToken);
-            string mac = await connection.HandshakeAsync(cancellationToken);
+            string mac = settings.Protocol == DeviceProtocol.V4
+                ? await connection.HandshakeAsync(V4MaxSkippedFrames, cancellationToken)
+                : await connection.HandshakeAsync(cancellationToken);
             IReadOnlyList<WifiNetwork> scanned = DeviceResponseParser.ParseScanApList(
                 await connection.RequestAsync(DeviceMessages.Command("apscan"), cancellationToken));
             (string ssid, string pass) = await selectWifi(scanned, cancellationToken);
-            logger.LogInformation("TX {Message}", settings.ToJson(mac, ssid, pass, masked: true).TrimEnd('\n'));
-            DeviceResponseParser.EnsureOk(await connection.RequestAsync(settings.ToJson(mac, ssid, pass), cancellationToken, logSend: false));
-            DeviceResponseParser.EnsureOk(await connection.RequestAsync(DeviceMessages.ConnectAp(mac), cancellationToken));
+            logger.LogInformation("TX {Message} (protocol {Protocol})", settings.ToJson(mac, ssid, pass, masked: true).TrimEnd('\n'), settings.Protocol);
+            string json = settings.ToJson(mac, ssid, pass);
+
+            switch (settings.Protocol)
+            {
+                case DeviceProtocol.V1:
+                    await connection.SendAsync(json, logSend: false, cancellationToken);
+                    await connection.CloseGracefullyAsync(cancellationToken);
+                    break;
+                case DeviceProtocol.V2:
+                    await connection.RequestAsync(json, cancellationToken, logSend: false); // 응답 내용은 검사하지 않는다(참고 구현과 같음)
+                    await connection.SendAsync(DeviceMessages.Delay, logSend: true, cancellationToken);
+                    await connection.CloseGracefullyAsync(cancellationToken);
+                    break;
+                case DeviceProtocol.V4:
+                    await connection.SendAsync(json, logSend: false, cancellationToken);
+                    await connection.SendAsync(DeviceMessages.ConnectAp(mac), logSend: true, cancellationToken);
+                    await connection.CloseGracefullyAsync(cancellationToken);
+                    break;
+                default:
+                    DeviceResponseParser.EnsureOk(await connection.RequestAsync(json, cancellationToken, logSend: false));
+                    DeviceResponseParser.EnsureOk(await connection.RequestAsync(DeviceMessages.ConnectAp(mac), cancellationToken));
+                    break;
+            }
         }
+
+        /// <summary>참고 구현 ConfigratorV4: hello 뒤 프레임 1개를 버리고 BUTTON_이면 1개 더 버린다.</summary>
+        private const int V4MaxSkippedFrames = 2;
 
         /// <summary>
         /// 장치가 응답·연결 종료 없이 재부팅·초기화하는 명령(Reboot, TestFactoryReset).

@@ -1,4 +1,5 @@
 using Biz.Bizadm.PowerManager.DeviceConfig.HostWifi;
+using Biz.Bizadm.PowerManager.DeviceConfig.Protocol;
 using Biz.Bizadm.PowerManager.DeviceConfig.Transport;
 using Biz.Bizadm.PowerManager.DeviceConfig.Wifi;
 using Microsoft.Extensions.Logging;
@@ -17,6 +18,11 @@ namespace Biz.Bizadm.PowerManager.DeviceConfig
         /// <param name="onCommandCompleted">명령이 성공할 때마다 호출된다. 실패한 명령은 통보하지 않는다.</param>
         public async Task RunAsync(Action<DeviceCommandResult>? onCommandCompleted, CancellationToken cancellationToken)
         {
+            // V1은 MqttKey가 필수다. PC Wi-Fi를 장치 AP로 바꾸기 전에 막는다(#13 C3)
+            if (options.Commands.Contains(DeviceCommand.ConnectAp)
+                && options.Settings is { Protocol: DeviceProtocol.V1 } v1 && string.IsNullOrEmpty(v1.MqttKey))
+                throw new InvalidOperationException("MqttKey is required for Protocol V1");
+
             WifiAdapter? connectedAdapter = null; // ConnectOpenAsync를 호출한 어댑터(복구 대상)
             string? previousSsid = null;
             bool failed = false;

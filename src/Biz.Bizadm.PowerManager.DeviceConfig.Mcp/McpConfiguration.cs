@@ -58,10 +58,13 @@ namespace Biz.Bizadm.PowerManager.DeviceConfig.Mcp
             ConfigurationValidator.Validate(Settings);
             ValidatePort("Settings.ApiServerPort", Settings.ApiServerPort);
             ValidatePort("Settings.ServerPort", Settings.ServerPort);
+            // V1인데 MqttKey가 없어도 기동은 막지 않는다. ConnectAp 호출 때 ResolveSettings가 막는다(#13 C3)
+            if (!DeviceProtocols.TryParse(Settings.Protocol, out _))
+                throw new ArgumentException($"Settings.Protocol must be one of V1, V2, V3, V4: {Settings.Protocol}");
         }
 
-        /// <summary>Commands는 tool 호출마다 채운다.</summary>
-        public DeviceConfigOptions ToOptions(IReadOnlyList<WifiProfile> wifiProfiles) => new()
+        /// <summary>Commands는 tool 호출마다 채운다. mqttKey는 ConfigSecretProtector가 복호화한 값이다(YAML 모델 값은 암호문).</summary>
+        public DeviceConfigOptions ToOptions(IReadOnlyList<WifiProfile> wifiProfiles, string? mqttKey) => new()
         {
             Host = Device.Host,
             Port = Device.Port,
@@ -83,6 +86,8 @@ namespace Biz.Bizadm.PowerManager.DeviceConfig.Mcp
                 Lati = s.Lati,
                 Long = s.Long,
                 Topic = s.Topic,
+                Protocol = DeviceProtocols.TryParse(s.Protocol, out DeviceProtocol protocol) ? protocol : DeviceProtocol.V3,
+                MqttKey = mqttKey,
             },
         };
 
@@ -184,5 +189,13 @@ namespace Biz.Bizadm.PowerManager.DeviceConfig.Mcp
 
         [Property(PropertyType.STRING, required: false)]
         public string Topic { get; set; } = "dwd";
+
+        /// <summary>ConnectAp 흐름 V1|V2|V3|V4(대소문자 구분, 기본 V3). run_device_commands의 settings.protocol로 덮어쓴다.</summary>
+        [Property(PropertyType.STRING, required: false)]
+        public string Protocol { get; set; } = "V3";
+
+        /// <summary>V1 설정 JSON의 mqtt_key. 기동 시 OsKms로 암호화(DEKENC:)해 설정 파일에 다시 쓴다. tool 인자로는 받지 않는다.</summary>
+        [Property(PropertyType.STRING, required: false)]
+        public string? MqttKey { get; set; }
     }
 }

@@ -71,6 +71,9 @@ namespace Biz.Bizadm.PowerManager.DeviceConfig.Mcp
 
             [Description("MQTT topic (string)")]
             public string? Topic { get; init; }
+
+            [Description("ConnectAp flow (string: V1, V2, V3 or V4; case-sensitive; default V3). V1 needs Settings.MqttKey in the config file")]
+            public string? Protocol { get; init; }
         }
 
         public sealed record CommandResult(string Command, string Response);
@@ -141,11 +144,23 @@ namespace Biz.Bizadm.PowerManager.DeviceConfig.Mcp
             }
         }, ct);
 
-        /// <summary>필드 단위 병합(#9): 인자 → 설정 파일 Settings → SettingsSection 기본값(선택 필드만). 둘 다 null인 경우는 호출 전에 거른다.</summary>
+        /// <summary>
+        /// 필드 단위 병합(#9): 인자 → 설정 파일 Settings → SettingsSection 기본값(선택 필드만). 둘 다 null인 경우는 호출 전에 거른다.
+        /// Protocol은 인자 → 설정 파일 → V3, MqttKey는 설정 파일 값만 쓴다(#13). V1인데 MqttKey가 없으면 Wi-Fi 접속 전에 ArgumentException.
+        /// </summary>
         internal static DeviceSettings ResolveSettings(DeviceSettings? file, SettingsOverride? o)
         {
-            if (o is null)
-                return file!;
+            DeviceSettings resolved = o is null ? file! : Merge(file, o);
+            if (resolved.Protocol == DeviceProtocol.V1 && string.IsNullOrEmpty(resolved.MqttKey))
+                throw new ArgumentException("ConnectAp with protocol V1 requires Settings.MqttKey in the config file");
+            return resolved;
+        }
+
+        private static DeviceSettings Merge(DeviceSettings? file, SettingsOverride o)
+        {
+            DeviceProtocol protocol = file?.Protocol ?? DeviceProtocol.V3;
+            if (o.Protocol is not null && !DeviceProtocols.TryParse(o.Protocol, out protocol))
+                throw new ArgumentException($"settings.protocol must be one of V1, V2, V3, V4: {o.Protocol}");
             SettingsSection defaults = new();
             string? apiServerAddr = o.ApiServerAddr ?? file?.ApiServerAddr;
             int? apiServerPort = o.ApiServerPort ?? file?.ApiServerPort;
@@ -179,6 +194,8 @@ namespace Biz.Bizadm.PowerManager.DeviceConfig.Mcp
                 Lati = o.Lati ?? file?.Lati ?? defaults.Lati,
                 Long = o.Long ?? file?.Long ?? defaults.Long,
                 Topic = o.Topic ?? file?.Topic ?? defaults.Topic,
+                Protocol = protocol,
+                MqttKey = file?.MqttKey,
             };
         }
 
