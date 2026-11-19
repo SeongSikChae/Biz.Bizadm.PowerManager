@@ -12,6 +12,7 @@ namespace Biz.Bizadm.PowerManager.DeviceConfig.Tests.Transport
         private const string Ok = "{\"mac\":\"" + MockDevice.Mac + "\",\"respone\":\"OK\"}";
         private const string ScanList = "{\"SCAN_AP_LIST\":{\"MyRouter:-50\",\"Other:-70\"}}";
         private const string Pass = "p@ss+&word";
+        private static readonly string EscapedPass = JsonSerializer.Serialize(Pass)[1..^1]; // 장치로 보내는 이스케이프된 형태(p@ss+&word)
         private static readonly TimeSpan Timeout = TimeSpan.FromSeconds(1);
 
         private static readonly DeviceSettings Settings = new()
@@ -118,12 +119,12 @@ namespace Biz.Bizadm.PowerManager.DeviceConfig.Tests.Transport
             Assert.AreEqual(MockDevice.Mac, settings.RootElement.GetProperty("mac").GetString());
             Assert.AreEqual("MyRouter", settings.RootElement.GetProperty("ssid").GetString());
             Assert.AreEqual(Pass, settings.RootElement.GetProperty("pass").GetString());
-            StringAssert.Matches(settings.RootElement.GetProperty("mqtt_key").GetString(), new System.Text.RegularExpressions.Regex("^[A-Za-z0-9/]{16}$"));
+            StringAssert.Contains(lines[3], "\"pass\":\"" + EscapedPass + "\"");
+            Assert.IsFalse(settings.RootElement.TryGetProperty("mqtt_key", out _), "mqtt_key sent");
             Assert.AreEqual("{\"mac\":\"" + MockDevice.Mac + "\",\"command\":\"connectap\"}", lines[4]);
 
-            string mqttKey = settings.RootElement.GetProperty("mqtt_key").GetString()!;
             Assert.IsFalse(logger.AllText.Contains(Pass), "pass in log");
-            Assert.IsFalse(logger.AllText.Contains(mqttKey), "mqtt_key in log");
+            Assert.IsFalse(logger.AllText.Contains(EscapedPass), "escaped pass in log");
         }
 
         [TestMethod]
@@ -135,12 +136,10 @@ namespace Biz.Bizadm.PowerManager.DeviceConfig.Tests.Transport
             TimeoutException ex = await Assert.ThrowsExactlyAsync<TimeoutException>(
                 () => Client(device, logger).ConnectApAsync(SelectMyRouter, Settings, TestContext.CancellationToken));
 
-            string mqttKey = JsonDocument.Parse(device.Received.Single(r => r.Line.Contains("\"pass\"")).Line)
-                .RootElement.GetProperty("mqtt_key").GetString()!;
             foreach (string text in new[] { ex.ToString(), logger.AllText })
             {
                 Assert.IsFalse(text.Contains(Pass), "pass leaked");
-                Assert.IsFalse(text.Contains(mqttKey), "mqtt_key leaked");
+                Assert.IsFalse(text.Contains(EscapedPass), "escaped pass leaked");
             }
         }
 
@@ -153,8 +152,11 @@ namespace Biz.Bizadm.PowerManager.DeviceConfig.Tests.Transport
             IOException ex = await Assert.ThrowsExactlyAsync<IOException>(
                 () => Client(device, logger).ConnectApAsync(SelectMyRouter, Settings, TestContext.CancellationToken));
 
-            Assert.IsFalse(ex.ToString().Contains(Pass));
-            Assert.IsFalse(logger.AllText.Contains(Pass));
+            foreach (string text in new[] { ex.ToString(), logger.AllText })
+            {
+                Assert.IsFalse(text.Contains(Pass), "pass leaked");
+                Assert.IsFalse(text.Contains(EscapedPass), "escaped pass leaked");
+            }
         }
 
         [TestMethod]

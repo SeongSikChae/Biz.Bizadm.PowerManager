@@ -1,0 +1,25 @@
+# device-config
+
+파일: src/Biz.Bizadm.PowerManager.DeviceConfig/Biz.Bizadm.PowerManager.DeviceConfig.csproj, src/Biz.Bizadm.PowerManager.DeviceConfig/DeviceCommandResult.cs, src/Biz.Bizadm.PowerManager.DeviceConfig/DeviceConfigOptions.cs, src/Biz.Bizadm.PowerManager.DeviceConfig/DeviceConfigRunner.cs, src/Biz.Bizadm.PowerManager.DeviceConfig/HostWifi/HostWifiLoader.cs, src/Biz.Bizadm.PowerManager.DeviceConfig/HostWifi/IHostWifi.cs, src/Biz.Bizadm.PowerManager.DeviceConfig/HostWifi/WifiModels.cs, src/Biz.Bizadm.PowerManager.DeviceConfig/IDeviceConfigSelector.cs, src/Biz.Bizadm.PowerManager.DeviceConfig/Protocol/DeviceMessages.cs, src/Biz.Bizadm.PowerManager.DeviceConfig/Protocol/DeviceProtocolException.cs, src/Biz.Bizadm.PowerManager.DeviceConfig/Protocol/DeviceResponseParser.cs, src/Biz.Bizadm.PowerManager.DeviceConfig/Protocol/DeviceSettings.cs, src/Biz.Bizadm.PowerManager.DeviceConfig/Transport/DeviceClient.cs, src/Biz.Bizadm.PowerManager.DeviceConfig/Transport/DeviceCommand.cs, src/Biz.Bizadm.PowerManager.DeviceConfig/Transport/DeviceConnection.cs, src/Biz.Bizadm.PowerManager.DeviceConfig/Transport/DeviceFrameReader.cs, src/Biz.Bizadm.PowerManager.DeviceConfig/Wifi/WifiProfile.cs, src/Biz.Bizadm.PowerManager.DeviceConfig/Wifi/WifiProfileMatcher.cs, tests/Biz.Bizadm.PowerManager.DeviceConfig.Tests/Biz.Bizadm.PowerManager.DeviceConfig.Tests.csproj, tests/Biz.Bizadm.PowerManager.DeviceConfig.Tests/Device/EnvironmentSelector.cs, tests/Biz.Bizadm.PowerManager.DeviceConfig.Tests/Device/RealDeviceTests.cs, tests/Biz.Bizadm.PowerManager.DeviceConfig.Tests/Device/WindowsHostWifiTests.cs, tests/Biz.Bizadm.PowerManager.DeviceConfig.Tests/DeviceConfigRunnerTests.cs, tests/Biz.Bizadm.PowerManager.DeviceConfig.Tests/HostWifi/HostWifiLoaderTests.cs, tests/Biz.Bizadm.PowerManager.DeviceConfig.Tests/Protocol/DeviceMessagesTests.cs, tests/Biz.Bizadm.PowerManager.DeviceConfig.Tests/Protocol/DeviceResponseParserTests.cs, tests/Biz.Bizadm.PowerManager.DeviceConfig.Tests/Protocol/DeviceSettingsTests.cs, tests/Biz.Bizadm.PowerManager.DeviceConfig.Tests/TestSupport/FakeHostWifi.cs, tests/Biz.Bizadm.PowerManager.DeviceConfig.Tests/TestSupport/FakeSelector.cs, tests/Biz.Bizadm.PowerManager.DeviceConfig.Tests/TestSupport/ListLogger.cs, tests/Biz.Bizadm.PowerManager.DeviceConfig.Tests/TestSupport/MockDevice.cs, tests/Biz.Bizadm.PowerManager.DeviceConfig.Tests/Transport/DeviceClientTests.cs, tests/Biz.Bizadm.PowerManager.DeviceConfig.Tests/Transport/DeviceFrameReaderTests.cs, tests/Biz.Bizadm.PowerManager.DeviceConfig.Tests/Wifi/WifiProfileMatcherTests.cs
+
+B540(DAWONDNS `B540_W`, ESP8266) 장치를 SoftAP TCP로 설정하는 라이브러리(장치 AP 접속 → 명령 실행 → PC Wi-Fi 복구). App(콘솔)과 MCP(`device-config-mcp`)가 이 라이브러리를 쓴다. 상세 설계는 `docs/cli/0001`~`0003`에 있으며, 설정 JSON의 `mqtt_key`·relaxed 이스케이프에 관한 결정은 R6~R8이 대체한다(2026-11-19).
+
+## 요구(완료 조건)
+
+- R1. `DeviceConfigRunner`는 무선 어댑터 선택 → 접속 전 SSID 기억 → `Device.ApPrefix`로 시작하는 장치 AP 선택 → 개방형 접속과 IPv4 게이트웨이 대기(`ApConnectTimeoutSeconds`) → `Commands`를 순서대로 실행(명령마다 TCP 연결 → 핸드셰이크 → 명령 → 연결 종료) 순으로 동작하고, 장치 AP 접속을 시도했으면 성공·실패·취소와 관계없이 PC Wi-Fi를 접속 전 상태로 복구한다.
+- R2. PC Wi-Fi 호출이 `NotImplementedException`(미구현 OS)이면 경고를 남기고 `Device.Host`로 접속한다. 그 밖의 PC Wi-Fi 실패는 실행을 멈춘다.
+- R3. 연결마다 `[DUT<-PC] START\n` → `hello tcp SUCCESS_CONNECT\n`을 보내고 `[DUT->PC] START_OK:<mac>#`에서 MAC을 얻는다. 수신 프레임은 `#` 프레임과 JSON(중괄호 짝)으로 나누고 `BUTTON_…#` 이벤트 프레임은 건너뛴다.
+- R4. 명령 `ApScan`·`Reboot`·`FactoryReset`·`ScanAp`·`OnCmd`·`OffCmd`·`Measurement`·`OverLoad`·`TestFactoryReset`을 `docs/cli/0002` 5.2절 표의 송신·응답 형식으로 실행한다. `Reboot`·`TestFactoryReset`은 응답이 없거나 연결이 끊겨도 경고 후 성공으로 본다. 응답 형식이 다르면 실패다.
+- R5. `ConnectAp`는 한 연결에서 핸드셰이크 → `{"command":"apscan"}` → Wi-Fi 선택 → 설정 JSON → `{"mac":"<mac>","command":"connectap"}`을 보내고, 설정 JSON과 `connectap` 응답이 모두 `respone` `OK`여야 성공이다. Wi-Fi 후보는 등록 `WifiProfiles` 중 장치 `apscan` SSID와 대소문자까지 같은 것을 RSSI 높은 순으로 고르며, 후보가 없으면 설정을 보내지 않고 실패한다.
+- R6. 설정 JSON의 키와 순서는 `mac`, `api_server_addr`, `api_server_port`, `server_addr`, `server_port`, `ssl_support`, `ssid`, `pass`, `user_id`, `company`, `model`, `lati`, `long`, `topic`이며 `mqtt_key`는 없다. 값은 모두 문자열이고 `ssl_support`는 `yes`/`no`다(참고 구현 PowerManagerConfig `ConfigratorV3`의 `MqttConfigurationV2`와 같음).
+- R7. 설정 JSON은 `System.Text.Json` 기본 인코더로 직렬화한다(`+ & < > '`와 비ASCII는 `\uXXXX`).
+- R8. 송수신 메시지는 Information 로그로 남기되 설정 JSON의 `pass`만 `***`로 가린다. 실제 `pass`(원문·이스케이프된 형태)는 로그·예외 메시지에 남지 않는다.
+- R9. 응답 대기는 단계마다 `Device.TimeoutSeconds`다. 시간 초과는 `TimeoutException`, 응답 전 연결 종료는 `IOException`이며, 명령 하나가 실패하면 남은 명령을 실행하지 않는다.
+
+## 이력
+
+| 날짜 | 작업 | 바꾼 요구 | 변경 폴더 | 작업 문서 |
+|---|---|---|---|---|
+| 2026-11-19 | connectap-v3 | R1~R9 처음 작성. 설정 JSON의 `mqtt_key`(실행마다 임의 생성)와 relaxed 이스케이프 뺌, R6·R7 추가, R8 마스킹 대상을 `pass`만으로 바꿈. 실장비(`DWD-LS120_501f96`, `KT-FTTH-P1-IOT`): 변경 전에는 `respone OK` 뒤에도 공유기 미접속이었고, 변경 후에는 약 4초 만에 `dwapi.dawonai.com` DNS 조회와 서버 `POST /api/v1/devices/register/create`(HTTPS)까지 도달해 두 형식 차이(`mqtt_key`·이스케이프, 어느 쪽인지는 미분리)를 원인으로 확정 | docs/specs/connectap-v3/ | 2026-11-19-connectap-v3.md |
+
+표에 없는 이전 변경: 기록 없음(docs/cli/0001~0003 참조. #6 최초 구현)

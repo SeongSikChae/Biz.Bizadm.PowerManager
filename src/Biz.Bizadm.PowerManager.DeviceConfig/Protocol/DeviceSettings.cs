@@ -1,5 +1,4 @@
 using System.Globalization;
-using System.Text.Encodings.Web;
 using System.Text.Json;
 
 namespace Biz.Bizadm.PowerManager.DeviceConfig.Protocol
@@ -19,11 +18,12 @@ namespace Biz.Bizadm.PowerManager.DeviceConfig.Protocol
         public required string Long { get; init; }
         public required string Topic { get; init; }
 
-        // 장치 파서가 \uXXXX를 처리한다는 근거가 없으므로 + & < > ' 와 비ASCII를 그대로 보낸다(#2와 같음).
-        private static readonly JsonSerializerOptions JsonOptions = new() { Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping };
-
-        /// <summary>설정 JSON 한 줄 + '\n'. masked면 pass·mqtt_key를 "***"로 바꾼다(로그용).</summary>
-        public string ToJson(string mac, string ssid, string pass, string mqttKey, bool masked = false)
+        /// <summary>
+        /// 설정 JSON 한 줄 + '\n'. masked면 pass를 "***"로 바꾼다(로그용).
+        /// 키·순서와 직렬화(System.Text.Json 기본 인코더: + &amp; &lt; &gt; ' 와 비ASCII를 \uXXXX로)는
+        /// 참고 구현 PowerManagerConfig ConfigratorV3(MqttConfigurationV2)와 같다. mqtt_key는 보내지 않는다(#11).
+        /// </summary>
+        public string ToJson(string mac, string ssid, string pass, bool masked = false)
         {
             Dictionary<string, string> values = new()
             {
@@ -41,9 +41,8 @@ namespace Biz.Bizadm.PowerManager.DeviceConfig.Protocol
                 ["lati"] = Lati,
                 ["long"] = Long,
                 ["topic"] = Topic,
-                ["mqtt_key"] = masked ? "***" : mqttKey,
             };
-            return JsonSerializer.Serialize(values, JsonOptions) + "\n";
+            return JsonSerializer.Serialize(values) + "\n";
         }
     }
 }

@@ -21,49 +21,61 @@ namespace Biz.Bizadm.PowerManager.DeviceConfig.Tests.Protocol
             Topic = "dwd",
         };
 
+        // 참고 구현 PowerManagerConfig MqttConfigurationV2의 속성 순서
+        private static readonly string[] V3Keys =
+        [
+            "mac", "api_server_addr", "api_server_port", "server_addr", "server_port", "ssl_support", "ssid", "pass",
+            "user_id", "company", "model", "lati", "long", "topic",
+        ];
+
         [TestMethod]
-        public void ToJson_AllValuesAreStrings()
+        public void ToJson_KeysInV3OrderAndAllValuesAreStrings()
         {
-            string json = Settings.ToJson("a1b2c3d4e5f6", "MyRouter", "secret", "KEY0123456789abc");
+            string json = Settings.ToJson("a1b2c3d4e5f6", "MyRouter", "secret");
 
             Assert.IsTrue(json.EndsWith('\n'));
             Assert.AreEqual(1, json.Count(c => c == '\n'));
             using JsonDocument doc = JsonDocument.Parse(json);
-            Dictionary<string, string> values = doc.RootElement.EnumerateObject().ToDictionary(p => p.Name, p => p.Value.GetString()!);
-            CollectionAssert.AreEquivalent(
-                new[] { "mac", "api_server_addr", "api_server_port", "server_addr", "server_port", "ssl_support", "ssid", "pass",
-                        "user_id", "company", "model", "lati", "long", "topic", "mqtt_key" },
-                values.Keys.ToArray());
+            JsonProperty[] properties = doc.RootElement.EnumerateObject().ToArray();
+            CollectionAssert.AreEqual(V3Keys, properties.Select(p => p.Name).ToArray());
+            Assert.IsTrue(properties.All(p => p.Value.ValueKind == JsonValueKind.String));
+            Dictionary<string, string> values = properties.ToDictionary(p => p.Name, p => p.Value.GetString()!);
             Assert.AreEqual("443", values["api_server_port"]);
             Assert.AreEqual("8883", values["server_port"]);
             Assert.AreEqual("yes", values["ssl_support"]);
             Assert.AreEqual("secret", values["pass"]);
-            Assert.AreEqual("KEY0123456789abc", values["mqtt_key"]);
             Assert.AreEqual("dwd", values["topic"]);
+        }
+
+        [TestMethod]
+        public void ToJson_HasNoMqttKey()
+        {
+            string json = Settings.ToJson("m", "s", "p");
+            Assert.IsFalse(json.Contains("mqtt_key"));
         }
 
         [TestMethod]
         public void ToJson_SslSupportFalse_IsNo()
         {
-            string json = (Settings with { SslSupport = false }).ToJson("m", "s", "p", "k");
+            string json = (Settings with { SslSupport = false }).ToJson("m", "s", "p");
             StringAssert.Contains(json, "\"ssl_support\":\"no\"");
         }
 
         [TestMethod]
-        public void ToJson_DoesNotEscapeSpecialCharacters()
+        public void ToJson_EscapesLikeDefaultEncoder()
         {
-            string json = Settings.ToJson("m", "s", "a+b&c<d>'e", "k");
-            StringAssert.Contains(json, "\"pass\":\"a+b&c<d>'e\"");
+            string json = Settings.ToJson("m", "s", "a+b&c<d>'e");
+            StringAssert.Contains(json, "\"pass\":\"a\\u002Bb\\u0026c\\u003Cd\\u003E\\u0027e\"");
         }
 
         [TestMethod]
-        public void ToJson_Masked_HidesSecrets()
+        public void ToJson_Masked_HidesPassOnly()
         {
-            string json = Settings.ToJson("m", "s", "secret", "KEY0123456789abc", masked: true);
+            string json = Settings.ToJson("m", "MyRouter", "secret", masked: true);
             Assert.IsFalse(json.Contains("secret"));
-            Assert.IsFalse(json.Contains("KEY0123456789abc"));
             StringAssert.Contains(json, "\"pass\":\"***\"");
-            StringAssert.Contains(json, "\"mqtt_key\":\"***\"");
+            StringAssert.Contains(json, "\"ssid\":\"MyRouter\"");
+            StringAssert.Contains(json, "\"user_id\":\"user\"");
         }
     }
 }

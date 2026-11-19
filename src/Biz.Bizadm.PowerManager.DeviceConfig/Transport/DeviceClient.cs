@@ -39,9 +39,8 @@ namespace Biz.Bizadm.PowerManager.DeviceConfig.Transport
             IReadOnlyList<WifiNetwork> scanned = DeviceResponseParser.ParseScanApList(
                 await connection.RequestAsync(DeviceMessages.Command("apscan"), cancellationToken));
             (string ssid, string pass) = await selectWifi(scanned, cancellationToken);
-            string mqttKey = MqttKeyGenerator.Create();
-            logger.LogInformation("TX {Message}", settings.ToJson(mac, ssid, pass, mqttKey, masked: true).TrimEnd('\n'));
-            DeviceResponseParser.EnsureOk(await connection.RequestAsync(settings.ToJson(mac, ssid, pass, mqttKey), cancellationToken, logSend: false));
+            logger.LogInformation("TX {Message}", settings.ToJson(mac, ssid, pass, masked: true).TrimEnd('\n'));
+            DeviceResponseParser.EnsureOk(await connection.RequestAsync(settings.ToJson(mac, ssid, pass), cancellationToken, logSend: false));
             DeviceResponseParser.EnsureOk(await connection.RequestAsync(DeviceMessages.ConnectAp(mac), cancellationToken));
         }
 

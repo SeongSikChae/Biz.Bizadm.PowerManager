@@ -56,7 +56,7 @@ namespace Biz.Bizadm.PowerManager.DeviceConfig.Transport
         /// <summary>
         /// 송신 후 timeout 안에서 프레임 1개를 받는다. logSend가 false면 TX 로그를 남기지 않는다(설정 JSON은 호출자가 마스킹해 남김).
         /// 시간 초과는 TimeoutException, 응답 전 연결 종료는 IOException.
-        /// 예외 메시지에는 송신 내용을 넣지 않는다(pass·mqtt_key 보호).
+        /// 예외 메시지에는 송신 내용을 넣지 않는다(pass 보호).
         /// </summary>
         public async Task<string> RequestAsync(string message, CancellationToken cancellationToken, bool logSend = true)
         {
