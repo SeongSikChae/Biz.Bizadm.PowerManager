@@ -39,6 +39,32 @@ public sealed class AppConfigurationTests
         Assert.AreEqual((ushort)18443, configuration.DeviceHttpsPort);
         Assert.AreEqual((ushort)1803, configuration.MqttPort);
         Assert.AreEqual((ushort)8883, configuration.MqttsPort);
+        Assert.AreEqual("dwmqtt.dawonai.com", configuration.DeviceMqttServerAddr);
+        Assert.AreEqual("powermanager.db", configuration.DatabasePath);
+    }
+
+    [TestMethod]
+    public void Validate_WithDeviceKeys_KeepsValues()
+    {
+        AppConfiguration configuration = Deserialize("ContentRootPath: .\nDeviceMqttServerAddr: 192.168.0.13\nDatabasePath: data/devices.db\n" + OsKmsYaml);
+
+        ConfigurationValidator.Validate(configuration);
+
+        Assert.AreEqual("192.168.0.13", configuration.DeviceMqttServerAddr);
+        Assert.AreEqual("data/devices.db", configuration.DatabasePath);
+    }
+
+    [TestMethod]
+    [DataRow("host:8883")]
+    [DataRow("my_host")]
+    [DataRow("\"my host\"")]
+    [DataRow("\"\"")]
+    public void Validate_InvalidDeviceMqttServerAddr_Throws(string value)
+    {
+        AppConfiguration configuration = Deserialize($"ContentRootPath: .\nDeviceMqttServerAddr: {value}\n" + OsKmsYaml);
+
+        ArgumentException ex = Assert.ThrowsExactly<ArgumentException>(() => ConfigurationValidator.Validate(configuration));
+        Assert.AreEqual("DeviceMqttServerAddr", ex.ParamName);
     }
 
     [TestMethod]

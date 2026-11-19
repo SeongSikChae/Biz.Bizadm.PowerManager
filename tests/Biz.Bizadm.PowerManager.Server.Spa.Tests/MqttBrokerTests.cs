@@ -1,5 +1,6 @@
 using Biz.Bizadm.PowerManager.Core.Mqtt;
 using Biz.Bizadm.PowerManager.Server.Core;
+using Biz.Bizadm.PowerManager.Server.Spa.Devices;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -36,11 +37,7 @@ public sealed class MqttBrokerTests
     }
 
     [TestCleanup]
-    public void TestCleanup()
-    {
-        if (Directory.Exists(tempRoot))
-            Directory.Delete(tempRoot, recursive: true);
-    }
+    public void TestCleanup() => TestApp.DeleteTempRoot(tempRoot);
 
     private sealed class RecordingHandler : IDeviceMessageHandler
     {
@@ -252,6 +249,46 @@ public sealed class MqttBrokerTests
             await app.StopAsync();
         }
         CollectionAssert.AreEqual(new[] { "rg" }, handler.Calls.ToArray());
+    }
+
+    // C8: 접속마다 자격 증명 판정을 관찰 로그로 남기고, 접속은 모두 받는다. 비밀번호 값은 남기지 않는다.
+    [TestMethod]
+    public async Task ValidatingConnection_LogsPasswordCheckAndAcceptsAll()
+    {
+        RecordingHandler handler = new RecordingHandler();
+        AppConfiguration configuration = TestApp.Configuration(tempRoot);
+        string wrongPassword = "WrongPassword9876";
+        string mqttKey;
+        await using (WebApplication app = await StartAsync(configuration, handler))
+        {
+            mqttKey = (await app.Services.GetRequiredService<DeviceRegistrationService>()
+                .RegisterAsync("aabbccddeeff", "user@example.com/kakao", "B540_W", "DAWONDNS", CancellationToken.None)).MqttKey;
+
+            (string ClientId, string? UserName, string? Password, string Expected)[] cases =
+            [
+                ("DAWONDNS-AABBCCDDEEFF", DeviceKey, mqttKey, "hasPassword=True, passwordCheck=\"Match\""),
+                ("DAWONDNS-aabbccddeeff", DeviceKey, wrongPassword, "hasPassword=True, passwordCheck=\"Mismatch\""),
+                ("DAWONDNS-aabbccddeeff", DeviceKey, null, "hasPassword=False, passwordCheck=\"Mismatch\""),
+                ("DAWONDNS-112233445566", "DAWONDNS-B540_W-112233445566", mqttKey, "hasPassword=True, passwordCheck=\"Unknown\""),
+                ("client-not-device", null, null, "hasPassword=False, passwordCheck=\"Unknown\""),
+            ];
+            foreach ((string clientId, string? userName, string? password, string expected) in cases)
+            {
+                MqttClientOptionsBuilder options = ClientOptions(configuration.MqttPort!.Value, clientId);
+                if (userName is not null)
+                    options = password is null ? options.WithCredentials(userName) : options.WithCredentials(userName, password);
+                using IMqttClient client = new MqttClientFactory().CreateMqttClient();
+                MqttClientConnectResult result = await client.ConnectAsync(options.Build());
+                Assert.AreEqual(MqttClientConnectResultCode.Success, result.ResultCode, clientId);
+                await WaitForLogAsync($"MQTT client connecting: clientId=\"{clientId}\", userName={(userName is null ? "null" : $"\"{userName}\"")}, {expected}");
+                await client.DisconnectAsync();
+            }
+            await app.StopAsync();
+        }
+
+        string log = ReadLogs();
+        Assert.IsFalse(log.Contains(mqttKey, StringComparison.Ordinal), "로그에 mqtt_key가 있다");
+        Assert.IsFalse(log.Contains(wrongPassword, StringComparison.Ordinal), "로그에 비밀번호가 있다");
     }
 
     private string ReadLogs()

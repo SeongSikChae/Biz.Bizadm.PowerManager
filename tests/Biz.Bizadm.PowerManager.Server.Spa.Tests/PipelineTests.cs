@@ -20,11 +20,7 @@ public sealed class PipelineTests
     }
 
     [ClassCleanup]
-    public static void ClassCleanup()
-    {
-        if (Directory.Exists(tempRoot))
-            Directory.Delete(tempRoot, recursive: true);
-    }
+    public static void ClassCleanup() => TestApp.DeleteTempRoot(tempRoot);
 
     private static Task<WebApplication> StartAsync(Action<WebApplication>? configureApp = null)
         => TestApp.StartAsync(TestApp.Configuration(tempRoot), Path.Combine(tempRoot, "log"), configureApp: configureApp);

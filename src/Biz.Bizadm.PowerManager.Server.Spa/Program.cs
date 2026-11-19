@@ -1,7 +1,10 @@
 using Biz.Bizadm.PowerManager.Core.Mqtt;
 using Biz.Bizadm.PowerManager.Server.Core;
+using Biz.Bizadm.PowerManager.Server.Spa.Data;
+using Biz.Bizadm.PowerManager.Server.Spa.Devices;
 using Biz.Bizadm.PowerManager.Server.Spa.Mqtt;
 using CommandLine;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.FileProviders;
 using System.Configuration;
 
@@ -112,6 +115,12 @@ namespace Biz.Bizadm.PowerManager.Server.Spa
 
             // 브로커는 KMS 복호화 후 설정을 받는다. 테스트가 configureBuilder에서 핸들러를 교체할 수 있도록 그 앞에 등록한다.
             builder.Services.AddSingleton(c);
+            string databasePath = Path.Combine(c.ContentRootPath, c.DatabasePath);
+            builder.Services.AddDbContextFactory<PowerManagerDbContext>(options => options.UseSqlite($"Data Source={databasePath}"));
+            builder.Services.AddSingleton(TimeProvider.System);
+            builder.Services.AddSingleton<DeviceRegistrationService>();
+            // hosted service는 등록 순서대로 시작하므로, 브로커가 키를 조회하기 전에 마이그레이션이 끝나게 앞에 둔다.
+            builder.Services.AddHostedService<DatabaseMigrationHostedService>();
             builder.Services.AddSingleton<IDeviceMessageHandler, LoggingDeviceMessageHandler>();
             builder.Services.AddSingleton<IDeviceCommandPublisher, MqttDeviceCommandPublisher>();
             builder.Services.AddHostedService<MqttBrokerHostedService>();

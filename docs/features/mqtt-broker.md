@@ -14,11 +14,13 @@ Server.Spa에 내장한 MQTT 브로커(MQTTnet). 장치 → 서버 메시지를 
 - R6. 해석에 성공했지만 `msg.o`가 R4의 네 값이 아니면, Warning 로그 항목 하나에 오퍼레이션, 장치 키, 토픽, ClientId, 원본 페이로드(UTF-8 디코딩, 이스케이프하지 않음)를 남긴다.
 - R7. `DeviceTopic.TryParse`로 해석하지 못한 토픽(장치 키 없는 `/lwt` Will 포함)의 메시지는 그대로 전달하고, Information 로그 항목 하나에 토픽, ClientId, 원본 페이로드(R6과 같은 형식)를 남긴다.
 - R8. R6·R7의 원본 페이로드가 4096바이트를 넘으면 앞 4096바이트만 디코딩해 남기고, 잘림 여부와 원래 바이트 수를 같은 로그 항목에 남긴다.
+- R9. 클라이언트가 접속할 때마다 Information 로그 항목 하나에 ClientId, 사용자명, 비밀번호 유무, 비밀번호 판정(`Match`·`Mismatch`·`Unknown`)을 남긴다. ClientId가 `DAWONDNS-{12자리 16진수}`이고 그 mac(대소문자 무관)이 `device-register`에 등록돼 있으면 비밀번호가 등록 `mqtt_key`와 같을 때 `Match`, 다르거나 없으면 `Mismatch`, 그 밖에는 `Unknown`이다. 비밀번호 값은 남기지 않고 접속은 거부하지 않는다(R1).
 
 ## 이력
 
 | 날짜 | 작업 | 바꾼 요구 | 변경 폴더 | 작업 문서 |
 |---|---|---|---|---|
 | 2026-11-19 | mqtt-unknown-op-log | R1~R5 처음 작성(기존 구현 기준), R6 추가(알 수 없는 오퍼레이션 경고에 토픽·ClientId·원본 페이로드), R7 추가(해석 불가 토픽 로그에 ClientId·원본 페이로드), R8 추가(4096바이트 자르기) | docs/specs/mqtt-unknown-op-log/ | 2026-11-19-mqtt-unknown-op-log.md |
+| 2026-11-19 | device-register-mqtt-key | R9 추가(CONNECT 자격 증명 관찰 로그) | docs/specs/device-register-mqtt-key/ | 2026-11-19-device-register-mqtt-key.md |
 
 표에 없는 이전 변경: 기록 없음(docs/server/0001~0003 참조. #1 최초 구현)

@@ -1,8 +1,11 @@
+using Biz.Bizadm.PowerManager.Core.Devices;
 using Biz.Bizadm.PowerManager.Core.Mqtt;
 using Biz.Bizadm.PowerManager.Server.Core;
+using Biz.Bizadm.PowerManager.Server.Spa.Devices;
 using MQTTnet.Server;
 using System.Buffers;
 using System.Security.Authentication;
+using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using System.Text.Json;
@@ -11,9 +14,10 @@ namespace Biz.Bizadm.PowerManager.Server.Spa.Mqtt
 {
     /// <summary>
     /// 내장 MQTT 브로커. MQTT 포트와 (TLS 사용 시) MQTTS 포트를 열고, 장치 → 서버 메시지를 <see cref="IDeviceMessageHandler"/>로 분배한다.
-    /// 접속 인증은 하지 않는다.
+    /// 접속 인증은 하지 않으며, 접속마다 자격 증명이 등록 키와 맞는지 관찰 로그만 남긴다.
     /// </summary>
-    public sealed class MqttBrokerHostedService(AppConfiguration configuration, IDeviceMessageHandler handler, ILogger<MqttBrokerHostedService> logger)
+    public sealed class MqttBrokerHostedService(AppConfiguration configuration, IDeviceMessageHandler handler,
+        DeviceRegistrationService registrations, ILogger<MqttBrokerHostedService> logger)
         : IHostedService, IAsyncDisposable
     {
         /// <summary>
@@ -44,6 +48,7 @@ namespace Biz.Bizadm.PowerManager.Server.Spa.Mqtt
 
             server = factory.CreateMqttServer(optionsBuilder.Build());
             server.InterceptingPublishAsync += OnPublishAsync;
+            server.ValidatingConnectionAsync += OnValidatingConnectionAsync;
             await server.StartAsync();
             logger.LogInformation("MQTT broker started: port={MqttPort}, tlsPort={MqttsPort}",
                 c.MqttPort, certificate is null ? null : c.MqttsPort);
@@ -61,11 +66,41 @@ namespace Biz.Bizadm.PowerManager.Server.Spa.Mqtt
                 MqttServer current = server;
                 server = null;
                 current.InterceptingPublishAsync -= OnPublishAsync;
+                current.ValidatingConnectionAsync -= OnValidatingConnectionAsync;
                 await current.StopAsync();
                 current.Dispose();
             }
             certificate?.Dispose();
             certificate = null;
+        }
+
+        /// <summary>
+        /// 접속 자격 증명 관찰(인증 강제 전 형식 확인용). ClientId <c>DAWONDNS-{mac}</c>의 mac이 등록돼 있으면
+        /// 비밀번호를 등록 키와 비교해 Match/Mismatch, 아니면 Unknown으로 남긴다. 비밀번호 값은 남기지 않고, 접속은 모두 받는다.
+        /// </summary>
+        private async Task OnValidatingConnectionAsync(ValidatingConnectionEventArgs e)
+        {
+            string? password = e.Password;
+            bool hasPassword = !string.IsNullOrEmpty(password);
+            string check = "Unknown";
+            try
+            {
+                if (DeviceIdentity.TryParseClientId(e.ClientId, out string? mac)
+                    && await registrations.FindMqttKeyAsync(mac, CancellationToken.None) is string key)
+                {
+                    check = hasPassword && CryptographicOperations.FixedTimeEquals(Encoding.UTF8.GetBytes(password!), Encoding.UTF8.GetBytes(key))
+                        ? "Match"
+                        : "Mismatch";
+                }
+            }
+            catch (Exception ex)
+            {
+                // 관찰 로그 실패로 접속을 막지 않는다.
+                logger.LogError(ex, "MQTT connection credential check failed: {ClientId}", e.ClientId);
+            }
+
+            logger.LogInformation("MQTT client connecting: clientId={ClientId}, userName={UserName}, hasPassword={HasPassword}, passwordCheck={PasswordCheck}",
+                e.ClientId, e.UserName, hasPassword, check);
         }
 
         private async Task OnPublishAsync(InterceptingPublishEventArgs e)
