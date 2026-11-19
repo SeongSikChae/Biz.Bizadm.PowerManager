@@ -73,10 +73,10 @@ public sealed class MqttBrokerTests
         => TestApp.StartAsync(configuration, Path.Combine(tempRoot, "log"),
             builder => builder.Services.Replace(ServiceDescriptor.Singleton<IDeviceMessageHandler>(handler)));
 
-    private static MqttClientOptionsBuilder ClientOptions(ushort port)
+    private static MqttClientOptionsBuilder ClientOptions(ushort port, string? clientId = null)
         => new MqttClientOptionsBuilder()
             .WithTcpServer("127.0.0.1", port)
-            .WithClientId("test-" + Guid.NewGuid().ToString("N")[..8])
+            .WithClientId(clientId ?? "test-" + Guid.NewGuid().ToString("N")[..8])
             .WithProtocolVersion(MqttProtocolVersion.V310);
 
     [TestMethod]
@@ -150,6 +150,78 @@ public sealed class MqttBrokerTests
     }
 
     [TestMethod]
+    public async Task UnknownOperation_LogsClientIdAndRawPayload()
+    {
+        const string clientId = "unknown-op-test";
+        const string payload = """{"sid":"0","msg":{"o":"n","e":[{"n":"/1/0/0","v":1}]}}""";
+        RecordingHandler handler = new RecordingHandler();
+        AppConfiguration configuration = TestApp.Configuration(tempRoot);
+        await using (WebApplication app = await StartAsync(configuration, handler))
+        {
+            using IMqttClient client = new MqttClientFactory().CreateMqttClient();
+            await client.ConnectAsync(ClientOptions(configuration.MqttPort!.Value, clientId).Build());
+            await client.PublishStringAsync(UplinkTopic, payload, MqttQualityOfServiceLevel.AtLeastOnce);
+            // 같은 클라이언트의 QoS 1 발행은 순서대로 처리되므로, 뒤의 rg 수신으로 앞 메시지 처리 완료를 확인한다.
+            await client.PublishStringAsync(UplinkTopic, RegisterJson, MqttQualityOfServiceLevel.AtLeastOnce);
+            await handler.Registered.Task.WaitAsync(Timeout);
+
+            await client.DisconnectAsync();
+            await app.StopAsync();
+        }
+
+        CollectionAssert.AreEqual(new[] { "rg" }, handler.Calls.ToArray());
+        string log = ReadLogs();
+        StringAssert.Contains(log, $"Unknown device operation \"n\": \"{DeviceKey}\", topic=\"{UplinkTopic}\", clientId=\"{clientId}\", bytes={Encoding.UTF8.GetByteCount(payload)}, truncated=False, payload={payload}");
+    }
+
+    [TestMethod]
+    public async Task WillOnUnparsedLwtTopic_LogsClientIdAndPayload()
+    {
+        const string clientId = "lwt-raw-test";
+        RecordingHandler handler = new RecordingHandler();
+        AppConfiguration configuration = TestApp.Configuration(tempRoot);
+        await using (WebApplication app = await StartAsync(configuration, handler))
+        {
+            // 실장비처럼 장치 키 없는 /lwt를 Will 토픽으로 등록하고 DISCONNECT 없이 끊는다.
+            using (TcpClient tcp = new TcpClient())
+            {
+                await tcp.ConnectAsync(IPAddress.Loopback, configuration.MqttPort!.Value);
+                NetworkStream stream = tcp.GetStream();
+                await stream.WriteAsync(BuildMqtt31Connect(clientId, "/lwt", "offline"));
+                byte[] connAck = new byte[4];
+                await stream.ReadExactlyAsync(connAck).AsTask().WaitAsync(Timeout);
+                Assert.AreEqual(0x00, connAck[3]);
+                tcp.Client.Close();
+            }
+
+            await WaitForLogAsync($"Unparsed topic passed through: \"/lwt\", clientId=\"{clientId}\", bytes=7, truncated=False, payload=offline");
+            await app.StopAsync();
+        }
+        Assert.IsTrue(handler.Calls.IsEmpty);
+    }
+
+    [TestMethod]
+    public async Task UnparsedTopic_LargePayload_IsTruncatedTo4096Bytes()
+    {
+        RecordingHandler handler = new RecordingHandler();
+        AppConfiguration configuration = TestApp.Configuration(tempRoot);
+        await using (WebApplication app = await StartAsync(configuration, handler))
+        {
+            using IMqttClient client = new MqttClientFactory().CreateMqttClient();
+            await client.ConnectAsync(ClientOptions(configuration.MqttPort!.Value).Build());
+            await client.PublishStringAsync("test/large", new string('a', 5000), MqttQualityOfServiceLevel.AtLeastOnce);
+
+            await WaitForLogAsync("Unparsed topic passed through: \"test/large\"");
+            await client.DisconnectAsync();
+            await app.StopAsync();
+        }
+
+        string log = ReadLogs();
+        StringAssert.Contains(log, "bytes=5000, truncated=True, payload=" + new string('a', 4096));
+        Assert.IsFalse(log.Contains(new string('a', 4097)), "4096바이트를 넘는 페이로드가 로그에 남았다.");
+    }
+
+    [TestMethod]
     public async Task Mqtts_Tls12_PublishRegister_CallsRegister_AndTls13OnlyFails()
     {
         string thumbprint = WritePfx(Path.Combine(tempRoot, "server.pfx"));
@@ -192,6 +264,19 @@ public sealed class MqttBrokerTests
             builder.Append(reader.ReadToEnd());
         }
         return builder.ToString();
+    }
+
+    /// <summary>핸들러 신호가 없는 로그(Will 등)를 기다린다. 파일 sink는 버퍼링하지 않아 실행 중에도 읽힌다.</summary>
+    private async Task WaitForLogAsync(string expected)
+    {
+        DateTime deadline = DateTime.UtcNow + Timeout;
+        while (DateTime.UtcNow < deadline)
+        {
+            if (Directory.Exists(Path.Combine(tempRoot, "log")) && ReadLogs().Contains(expected, StringComparison.Ordinal))
+                return;
+            await Task.Delay(100);
+        }
+        Assert.Fail($"로그에 기대 문자열이 없다: {expected}{Environment.NewLine}{ReadLogs()}");
     }
 
     private static string WritePfx(string path)

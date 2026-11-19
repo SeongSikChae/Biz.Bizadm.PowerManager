@@ -4,6 +4,7 @@ using MQTTnet.Server;
 using System.Buffers;
 using System.Security.Authentication;
 using System.Security.Cryptography.X509Certificates;
+using System.Text;
 using System.Text.Json;
 
 namespace Biz.Bizadm.PowerManager.Server.Spa.Mqtt
@@ -15,6 +16,11 @@ namespace Biz.Bizadm.PowerManager.Server.Spa.Mqtt
     public sealed class MqttBrokerHostedService(AppConfiguration configuration, IDeviceMessageHandler handler, ILogger<MqttBrokerHostedService> logger)
         : IHostedService, IAsyncDisposable
     {
+        /// <summary>
+        /// 로그에 남길 원본 페이로드의 최대 바이트 수. 넘으면 앞부분만 디코딩한다.
+        /// </summary>
+        private const int MaxLoggedPayloadBytes = 4096;
+
         private MqttServer? server;
         private X509Certificate2? certificate;
 
@@ -67,8 +73,11 @@ namespace Biz.Bizadm.PowerManager.Server.Spa.Mqtt
             string topicName = e.ApplicationMessage.Topic;
             if (!DeviceTopic.TryParse(topicName, out DeviceTopic? topic))
             {
-                // 서버→장치 토픽 등은 그대로 전달한다. 실장비 토픽 형태 확인용으로 Information으로 남긴다.
-                logger.LogInformation("Unparsed topic passed through: {Topic}", topicName);
+                // 서버→장치 토픽 등은 그대로 전달한다. 실장비 토픽 형태 확인용으로 ClientId·원본 페이로드와 함께 Information으로 남긴다.
+                (long bytes, bool truncated, string text) = DescribePayload(e.ApplicationMessage.Payload);
+                logger.LogInformation(
+                    "Unparsed topic passed through: {Topic}, clientId={ClientId}, bytes={PayloadBytes}, truncated={PayloadTruncated}, payload={Payload:l}",
+                    topicName, e.ClientId, bytes, truncated, text);
                 return;
             }
 
@@ -90,7 +99,7 @@ namespace Biz.Bizadm.PowerManager.Server.Spa.Mqtt
                     MqttOperation.Deregister => handler.DeregisterAsync(topic, envelope, e.CancellationToken),
                     MqttOperation.TimeSync => handler.TimeSyncAsync(topic, envelope, e.CancellationToken),
                     MqttOperation.Notify => handler.NotifyAsync(topic, envelope, e.CancellationToken),
-                    _ => LogUnknown(topic, envelope),
+                    _ => LogUnknown(topic, envelope, e),
                 };
                 await task;
             }
@@ -130,10 +139,27 @@ namespace Biz.Bizadm.PowerManager.Server.Spa.Mqtt
             return envelope;
         }
 
-        private Task LogUnknown(DeviceTopic topic, MqttEnvelope envelope)
+        /// <summary>
+        /// 알 수 없는 오퍼레이션은 실장비 메시지 형태 확인용으로 토픽·ClientId·원본 페이로드와 함께 경고로 남긴다.
+        /// </summary>
+        private Task LogUnknown(DeviceTopic topic, MqttEnvelope envelope, InterceptingPublishEventArgs e)
         {
-            logger.LogWarning("Unknown device operation {Operation}: {DeviceKey}", envelope.Msg.Operation, topic.DeviceKey);
+            (long bytes, bool truncated, string text) = DescribePayload(e.ApplicationMessage.Payload);
+            logger.LogWarning(
+                "Unknown device operation {Operation}: {DeviceKey}, topic={Topic}, clientId={ClientId}, bytes={PayloadBytes}, truncated={PayloadTruncated}, payload={Payload:l}",
+                envelope.Msg.Operation, topic.DeviceKey, e.ApplicationMessage.Topic, e.ClientId, bytes, truncated, text);
             return Task.CompletedTask;
+        }
+
+        /// <summary>
+        /// 원본 페이로드를 UTF-8로 디코딩한다. <see cref="MaxLoggedPayloadBytes"/>를 넘으면 앞부분만 디코딩한다
+        /// (경계에서 잘린 문자는 대체 문자가 된다).
+        /// </summary>
+        private static (long Bytes, bool Truncated, string Text) DescribePayload(ReadOnlySequence<byte> payload)
+        {
+            bool truncated = payload.Length > MaxLoggedPayloadBytes;
+            ReadOnlySequence<byte> logged = truncated ? payload.Slice(0, MaxLoggedPayloadBytes) : payload;
+            return (payload.Length, truncated, Encoding.UTF8.GetString(logged));
         }
     }
 }
