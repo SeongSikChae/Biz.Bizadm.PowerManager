@@ -17,8 +17,8 @@
 
 ## 이력
 
-| 날짜 | 작업 | 바꾼 요구 | 변경 폴더 | 작업 문서 |
-|---|---|---|---|---|
-| 2026-11-19 | device-register-mqtt-key | R1~R8 처음 작성(register·connect 501 껍데기를 구현으로 대체) | docs/specs/device-register-mqtt-key/ | 2026-11-19-device-register-mqtt-key.md |
+| 날짜 | 작업 | 바꾼 요구 | 변경 폴더 |
+|---|---|---|---|
+| 2026-11-19 | device-register-mqtt-key | R1~R8 처음 작성(register·connect 501 껍데기를 구현으로 대체) | docs/specs/device-register-mqtt-key/ |
 
 표에 없는 이전 변경: 기록 없음(docs/server/0001~0003의 endpoint 껍데기, #1)

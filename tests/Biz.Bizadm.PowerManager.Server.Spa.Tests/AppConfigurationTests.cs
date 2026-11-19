@@ -46,11 +46,11 @@ public sealed class AppConfigurationTests
     [TestMethod]
     public void Validate_WithDeviceKeys_KeepsValues()
     {
-        AppConfiguration configuration = Deserialize("ContentRootPath: .\nDeviceMqttServerAddr: 192.168.0.13\nDatabasePath: data/devices.db\n" + OsKmsYaml);
+        AppConfiguration configuration = Deserialize("ContentRootPath: .\nDeviceMqttServerAddr: 192.0.2.10\nDatabasePath: data/devices.db\n" + OsKmsYaml);
 
         ConfigurationValidator.Validate(configuration);
 
-        Assert.AreEqual("192.168.0.13", configuration.DeviceMqttServerAddr);
+        Assert.AreEqual("192.0.2.10", configuration.DeviceMqttServerAddr);
         Assert.AreEqual("data/devices.db", configuration.DatabasePath);
     }
 

@@ -11,7 +11,7 @@ phase: 방안
 
 B540(DAWONDNS `B540_W`, ESP8266) 스마트 플러그는 제조사 클라우드(`dwapi.dawonai.com:18443`, `dwmqtt.dawonai.com:8883`)에 의존한다. 장치의 서버 주소는 TCP 설정 수신(`api_server_addr`, `api_server_port`, `topic`, `LFota_*`)으로 바꿀 수 있으므로, 같은 계약을 제공하는 자체 서버를 만들면 장치를 직접 관리할 수 있다.
 
-근거 문서: `docs/.tmp/b540-rest-api.md`, `b540-mqtt-topic.md`, `b540-fota.md`, `b540-tcp-config.md`. `docs/.tmp/`는 `.gitignore` 대상이라 저장소에 커밋되지 않는다(로컬 분석 자료).
+근거 문서: `docs/reference/b540-rest-api.md`, `b540-mqtt-topic.md`, `b540-fota.md`, `b540-tcp-config.md`(B540 펌웨어 분석 문서).
 
 ## 목표 (1차)
 

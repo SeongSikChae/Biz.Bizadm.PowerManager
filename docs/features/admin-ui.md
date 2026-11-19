@@ -2,7 +2,7 @@
 
 파일: src/Biz.Bizadm.PowerManager.Server.Spa/Admin/AdminPortOnlyAttribute.cs, src/Biz.Bizadm.PowerManager.Client/package.json, src/Biz.Bizadm.PowerManager.Client/package-lock.json, src/Biz.Bizadm.PowerManager.Client/src/index.css, src/Biz.Bizadm.PowerManager.Client/src/components/ui/button.tsx, src/Biz.Bizadm.PowerManager.Client/src/components/ui/input.tsx, src/Biz.Bizadm.PowerManager.Client/src/components/ui/table.tsx, src/Biz.Bizadm.PowerManager.Client/src/components/ui/skeleton.tsx, src/Biz.Bizadm.PowerManager.Client/src/components/ui/alert.tsx, src/Biz.Bizadm.PowerManager.Client/src/components/AppShell.tsx, src/Biz.Bizadm.PowerManager.Client/src/App.tsx
 
-관리 화면(`Biz.Bizadm.PowerManager.Client`) 전체가 따르는 디자인 기준과 앱 틀, 관리 API의 포트 제한. 디자인은 2026-11-19 시안(https://claude.ai/artifact/LQMfPZ4gsT4t5kJYuKMBPU 의 "A. 테이블안")으로 확정했다. 관리 화면에는 아직 인증이 없으며, 인증은 별도 일감이다(그 전까지 관리 포트를 외부에 노출하지 않는 운영을 전제로 한다).
+관리 화면(`Biz.Bizadm.PowerManager.Client`) 전체가 따르는 디자인 기준과 앱 틀, 관리 API의 포트 제한. 디자인은 2026-11-19 디자인 시안(저장소 밖)의 "A. 테이블안"으로 확정했다. 관리 화면에는 아직 인증이 없으며, 인증은 별도 일감이다(그 전까지 관리 포트를 외부에 노출하지 않는 운영을 전제로 한다).
 
 ## 요구(완료 조건)
 
@@ -15,6 +15,6 @@
 
 ## 이력
 
-| 날짜 | 작업 | 바꾼 요구 | 변경 폴더 | 작업 문서 |
-|---|---|---|---|---|
-| 2026-11-19 | device-list-ui | R1~R6 처음 작성(관리 화면 디자인 기준·앱 틀·관리 포트 제한 신설, #17) | docs/specs/device-list-ui/ | 2026-11-19-device-list-ui.md |
+| 날짜 | 작업 | 바꾼 요구 | 변경 폴더 |
+|---|---|---|---|
+| 2026-11-19 | device-list-ui | R1~R6 처음 작성(관리 화면 디자인 기준·앱 틀·관리 포트 제한 신설, #17) | docs/specs/device-list-ui/ |

@@ -77,7 +77,7 @@ App(`device-config-app`)
 - C8: `DeviceConfigServiceTests`(`protocol` 덮어쓰기와 잘못된 값), 기대 목록에 `protocol`을 더한 `HttpIntegrationTests`의 `tools/list` 검사로 `settings` 스키마에 `protocol`이 보이는지 확인
 - C9: App `CreateOptions` 매핑은 빌드와 코드로 확인하고, App exe 설정 오류 시나리오(C1·C3)를 실행
 - C10: `dotnet build Biz.Bizadm.PowerManager.slnx -warnaserror`, `dotnet test --solution Biz.Bizadm.PowerManager.slnx`
-- C11: MCP 게시·배포(`FolderProfile`, exe·pdb만 교체, 기존 파일 백업) 후 사용자가 MCP를 시작하면 `DWD-LS120_501f96`에 `ConnectAp`(설정 파일 값 그대로, `Protocol` 없음 → V3)를 보내고 서버 로그에 `POST /api/v1/devices/register/create`가 찍히는지 확인
+- C11: MCP 게시·배포(`FolderProfile`, exe·pdb만 교체, 기존 파일 백업) 후 사용자가 MCP를 시작하면 B540 실장비 1에 `ConnectAp`(설정 파일 값 그대로, `Protocol` 없음 → V3)를 보내고 서버 로그에 `POST /api/v1/devices/register/create`가 찍히는지 확인
 
 ## 원칙 점검
 

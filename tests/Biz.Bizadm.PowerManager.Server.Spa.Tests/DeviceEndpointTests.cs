@@ -141,12 +141,12 @@ public sealed class DeviceEndpointTests
     public async Task Register_UsesConfiguredServerAddr()
     {
         AppConfiguration configuration = IsolatedConfiguration();
-        configuration.DeviceMqttServerAddr = "192.168.0.13";
+        configuration.DeviceMqttServerAddr = "192.0.2.10";
         await using WebApplication app = await StartAsync(configuration);
 
         (string verify, string mqttKey) = await RegisterAsync(app, FullBody);
 
-        Assert.AreEqual(DeviceVerify.Compute("192.168.0.13", Mac, mqttKey), verify);
+        Assert.AreEqual(DeviceVerify.Compute("192.0.2.10", Mac, mqttKey), verify);
         Assert.AreNotEqual(DeviceVerify.Compute("dwmqtt.dawonai.com", Mac, mqttKey), verify);
         await app.StopAsync();
     }

@@ -9,7 +9,7 @@
 - [x] T002 [P] `Create()` — 대문자·소문자·숫자 62자를 나열한 문자 목록 상수로 `RandomNumberGenerator.GetString(목록, 16)` (src/Biz.Bizadm.PowerManager.Core/Devices/MqttKeyGenerator.cs) — C2
 - [x] T003 [P] `TryNormalizeMac`(12자리 16진수 → 소문자), `TryParseDeviceKey`(`DAWONDNS-{비어 있지 않은 모델}-{mac}`, mac은 마지막 `-` 뒤), `TryParseClientId`(`DAWONDNS-{mac}`) 작성 (src/Biz.Bizadm.PowerManager.Core/Devices/DeviceIdentity.cs) — C4, C8, C11
 - [x] T004 [P] `DeviceRegisterResponse(Verify, MqttKey)`(선언 순서 verify→mqtt_key, JSON 이름 `verify`·`mqtt_key`), `DeviceConnectResponse(Delay)`(`delay`) 작성 (src/Biz.Bizadm.PowerManager.Core/Devices/DeviceRegisterResponse.cs) — C1, C11
-- [x] T005 DevServer(`/mnt/analysis/bizadm/work/b540`)에서 다원 응답과 일치를 확인한 Python 참조 계산으로 가상 입력 4개(`server_addr` `dwmqtt.dawonai.com`·`192.168.0.13`·`iot.example.com`, 가짜 mac·키)의 `verify` 시험 값을 만든다(저장소 파일 없음, 입력·결과를 작업 문서에 기록) — C3
+- [x] T005 분석 서버의 작업 폴더에서 다원 응답과 일치를 확인한 Python 참조 계산으로 가상 입력 4개(`server_addr` `dwmqtt.dawonai.com`·사설망 IP 주소·`iot.example.com`, 가짜 mac·키)의 `verify` 시험 값을 만든다(저장소 파일 없음, 입력·결과를 작업 문서에 기록) — C3
 - [x] T006 시험 값 4개 대조, `IsValidServerAddr`(허용·빈 값·`:`·`_`·공백), `RealDawonResponse_Matches`(환경 변수 `POWERMANAGER_DAWON_RESPONSE`·`POWERMANAGER_DAWON_MAC` 없으면 `Assert.Inconclusive`) 작성 (tests/Biz.Bizadm.PowerManager.Core.Tests/DeviceVerifyTests.cs) — C3
 - [x] T007 mac 정규화(대문자·11자·13자·비16진수·null), 장치 키(`DAWONDNS-B540_W-{mac}`·`DAWONDNS-M130-W-{MAC}` 성공, `DAWONDNS--{mac}`·`DAWONDNS-{mac}`·`X-B540_W-{mac}` 실패), ClientId 해석 테스트 (tests/Biz.Bizadm.PowerManager.Core.Tests/DeviceIdentityTests.cs) — C4, C8, C11
 - [x] T008 1000번 생성해 16자·`[A-Za-z0-9]`·서로 다름 확인 (tests/Biz.Bizadm.PowerManager.Core.Tests/MqttKeyGeneratorTests.cs) — C2
@@ -56,10 +56,10 @@
 
 ## 단계 6: 실측·실장비 확인
 
-- [x] T027 DevServer `dawon-resp.json`을 스크래치로 복사해 환경 변수로 `RealDawonResponse_Matches`만 실행, 결과·명령을 작업 문서에 기록하고 복사본 삭제 — C3
-- [x] T028 `dotnet publish` 후 배포본(`C:\Bizadm.PowerManager`) 교체. 실행 방식 확인과 중지·교체는 사용자에게 알리고 승인 뒤 — C10
-- [x] T029 ConnectAp에 넘길 `server_addr`(DeviceConfig 설정 `C:\Bizadm.PowerManager.Config\config.yml`의 `ServerAddr` 또는 덮어쓰기 인수)와 배포본 `DeviceMqttServerAddr`(설정에 없으면 기본값 `dwmqtt.dawonai.com`)가 같은지 확인하고, 다르면 실장비 시험 전에 사용자에게 알린다 — C10
-- [x] T030 대상 SSID(`DWD-LS120_501f96`) 확인을 받은 뒤 실장비 등록(DeviceConfig ConnectAp), 서버 로그로 등록 200·MQTT 접속 확인, C8 로그를 작업 문서에 기록 — C10
+- [x] T027 분석 서버의 실제 다원 응답 캡처를 스크래치로 복사해 환경 변수로 `RealDawonResponse_Matches`만 실행, 결과·명령을 작업 문서에 기록하고 복사본 삭제 — C3
+- [x] T028 `dotnet publish` 후 배포본(서버 로컬 배포 폴더) 교체. 실행 방식 확인과 중지·교체는 사용자에게 알리고 승인 뒤 — C10
+- [x] T029 ConnectAp에 넘길 `server_addr`(DeviceConfig 설정(MCP 로컬 배포 폴더의 `config.yml`)의 `ServerAddr` 또는 덮어쓰기 인수)와 배포본 `DeviceMqttServerAddr`(설정에 없으면 기본값 `dwmqtt.dawonai.com`)가 같은지 확인하고, 다르면 실장비 시험 전에 사용자에게 알린다 — C10
+- [x] T030 대상 SSID(B540 실장비 1의 장치 AP) 확인을 받은 뒤 실장비 등록(DeviceConfig ConnectAp), 서버 로그로 등록 200·MQTT 접속 확인, C8 로그를 작업 문서에 기록 — C10
 
 체크포인트: 작업 문서에 T005·T027·T030 결과 기록
 

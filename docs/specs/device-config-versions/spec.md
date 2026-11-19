@@ -5,7 +5,7 @@
 
 ## 무엇을, 왜
 
-#11에서 `ConnectAp` 설정 JSON을 참고 구현 [PowerManagerConfig](https://github.com/SeongSikChae/PowerManagerConfig)의 `ConfigratorV3`에 맞췄고, 실장비 B540(`DWD-LS120_501f96`)이 공유기 접속과 서버 등록 요청까지 도달했다(`docs/features/device-config.md` 이력). 참고 구현은 펌웨어·모델마다 흐름을 나눈다(`PowerManagerConfig/IConfigrator.cs` 주석: `ConfigratorV1` "M130, B540(V1.0.26)", `ConfigratorV2` "B540 (v1.0.28)", `ConfigratorV3` "B540 (v1.0.30, v1.0.32)", `ConfigratorV4` "B550 (v1.0.10)"). 지금 도구는 V3 흐름만 보내므로 다른 펌웨어·모델은 설정할 수 없다. 설정에서 흐름을 골라 V1·V2·V4도 보낼 수 있게 한다.
+#11에서 `ConnectAp` 설정 JSON을 참고 구현 [PowerManagerConfig](https://github.com/SeongSikChae/PowerManagerConfig)의 `ConfigratorV3`에 맞췄고, B540 실장비 1이 공유기 접속과 서버 등록 요청까지 도달했다(`docs/features/device-config.md` 이력). 참고 구현은 펌웨어·모델마다 흐름을 나눈다(`PowerManagerConfig/IConfigrator.cs` 주석: `ConfigratorV1` "M130, B540(V1.0.26)", `ConfigratorV2` "B540 (v1.0.28)", `ConfigratorV3` "B540 (v1.0.30, v1.0.32)", `ConfigratorV4` "B550 (v1.0.10)"). 지금 도구는 V3 흐름만 보내므로 다른 펌웨어·모델은 설정할 수 없다. 설정에서 흐름을 골라 V1·V2·V4도 보낼 수 있게 한다.
 
 참고 구현에서 장치와 주고받는 부분만 옮긴다(다원 클라우드 REST 호출 `GetMqttAuth`·`MqttAuthAdd`·`MqttKeyChange`는 옮기지 않는다). 흐름별 장치 송수신(핸드셰이크 뒤):
 
@@ -32,4 +32,4 @@ V4는 핸드셰이크에서 `hello`를 보낸 뒤 프레임 하나를 무조건 
 - C8. MCP: 설정 파일 `Settings.Protocol`·`Settings.MqttKey`를 읽고, `run_device_commands`의 `settings` 인자에 `protocol`을 더해 필드 단위로 덮어쓴다. tool 설명이 흐름 선택을 알린다.
 - C9. App: 설정 파일 `Settings.Protocol`·`Settings.MqttKey`를 읽어 같은 흐름으로 실행한다.
 - C10. 솔루션 빌드가 경고 없이 성공하고, 흐름별 송수신을 모의 장치로 확인하는 테스트를 포함해 전체 테스트(실장비 `Device` 카테고리 제외)가 통과한다.
-- C11. 고친 MCP를 `C:\Bizadm.PowerManager.Config`에 다시 배포해 `DWD-LS120_501f96`에 `Protocol` 기본값(V3)으로 `ConnectAp`를 보내고, 서버가 `POST /api/v1/devices/register/create`를 받는지 확인한다(#11과 같은 결과면 통과).
+- C11. 고친 MCP를 MCP 로컬 배포 폴더에 다시 배포해 B540 실장비 1에 `Protocol` 기본값(V3)으로 `ConnectAp`를 보내고, 서버가 `POST /api/v1/devices/register/create`를 받는지 확인한다(#11과 같은 결과면 통과).

@@ -2,7 +2,7 @@
 
 파일: src/Biz.Bizadm.PowerManager.Server.Spa/Mqtt/MqttBrokerHostedService.cs, src/Biz.Bizadm.PowerManager.Server.Spa/Mqtt/LoggingDeviceMessageHandler.cs, src/Biz.Bizadm.PowerManager.Server.Spa/Mqtt/MqttDeviceCommandPublisher.cs, src/Biz.Bizadm.PowerManager.Core/Mqtt/DeviceTopic.cs, src/Biz.Bizadm.PowerManager.Core/Mqtt/DeviceTopicKind.cs, src/Biz.Bizadm.PowerManager.Core/Mqtt/MqttEnvelope.cs, src/Biz.Bizadm.PowerManager.Core/Mqtt/MqttOperation.cs, src/Biz.Bizadm.PowerManager.Core/Mqtt/IDeviceMessageHandler.cs, src/Biz.Bizadm.PowerManager.Core/Mqtt/IDeviceCommandPublisher.cs, tests/Biz.Bizadm.PowerManager.Server.Spa.Tests/MqttBrokerTests.cs, tests/Biz.Bizadm.PowerManager.Core.Tests/DeviceTopicTests.cs, tests/Biz.Bizadm.PowerManager.Core.Tests/SerializationTests.cs
 
-Server.Spa에 내장한 MQTT 브로커(MQTTnet). 장치 → 서버 메시지를 토픽·SenML 유사 JSON으로 해석해 `IDeviceMessageHandler`로 분배한다. 지금 핸들러는 로그만 남기고, 서버 → 장치 발행은 껍데기다. 상세 설계는 `docs/server/0001`~`0003`에 있으며, 토픽·메시지 형태의 근거는 B540 펌웨어 덤프 분석(`docs/.tmp/b540-mqtt-topic.md`)이다. 실장비(M130-W)에서 근거와 다른 형태(`msg.o` `n`, 장치 키 없는 `/lwt`)가 관찰되어 R6~R8로 확인용 로그를 더했다(2026-11-19). 그 로그로 M130-W의 `n`이 상태 보고(토픽 접미 `notify/json`)임을 확인해 `notify`와 같이 분배한다(R4, 관찰 내용은 근거 문서 5절).
+Server.Spa에 내장한 MQTT 브로커(MQTTnet). 장치 → 서버 메시지를 토픽·SenML 유사 JSON으로 해석해 `IDeviceMessageHandler`로 분배한다. 지금 핸들러는 로그만 남기고, 서버 → 장치 발행은 껍데기다. 상세 설계는 `docs/server/0001`~`0003`에 있으며, 토픽·메시지 형태의 근거는 B540 펌웨어 덤프 분석(`docs/reference/b540-mqtt-topic.md`)이다. 실장비(M130-W)에서 근거와 다른 형태(`msg.o` `n`, 장치 키 없는 `/lwt`)가 관찰되어 R6~R8로 확인용 로그를 더했다(2026-11-19). 그 로그로 M130-W의 `n`이 상태 보고(토픽 접미 `notify/json`)임을 확인해 `notify`와 같이 분배한다(R4, 관찰 내용은 근거 문서 5절).
 
 ## 요구(완료 조건)
 
@@ -18,10 +18,11 @@ Server.Spa에 내장한 MQTT 브로커(MQTTnet). 장치 → 서버 메시지를 
 
 ## 이력
 
-| 날짜 | 작업 | 바꾼 요구 | 변경 폴더 | 작업 문서 |
-|---|---|---|---|---|
-| 2026-11-19 | mqtt-unknown-op-log | R1~R5 처음 작성(기존 구현 기준), R6 추가(알 수 없는 오퍼레이션 경고에 토픽·ClientId·원본 페이로드), R7 추가(해석 불가 토픽 로그에 ClientId·원본 페이로드), R8 추가(4096바이트 자르기) | docs/specs/mqtt-unknown-op-log/ | 2026-11-19-mqtt-unknown-op-log.md |
-| 2026-11-19 | device-register-mqtt-key | R9 추가(CONNECT 자격 증명 관찰 로그) | docs/specs/device-register-mqtt-key/ | 2026-11-19-device-register-mqtt-key.md |
-| 2026-11-19 | mqtt-notify-short-op | R4 바꿈(`n` → `NotifyAsync`), R6 바꿈(R4의 다섯 값) | docs/specs/mqtt-notify-short-op/ | 2026-11-19-mqtt-notify-short-op.md |
+| 날짜 | 작업 | 바꾼 요구 | 변경 폴더 |
+|---|---|---|---|
+| 2026-11-19 | mqtt-unknown-op-log | R1~R5 처음 작성(기존 구현 기준), R6 추가(알 수 없는 오퍼레이션 경고에 토픽·ClientId·원본 페이로드), R7 추가(해석 불가 토픽 로그에 ClientId·원본 페이로드), R8 추가(4096바이트 자르기) | docs/specs/mqtt-unknown-op-log/ |
+| 2026-11-19 | device-register-mqtt-key | R9 추가(CONNECT 자격 증명 관찰 로그) | docs/specs/device-register-mqtt-key/ |
+| 2026-11-19 | mqtt-notify-short-op | R4 바꿈(`n` → `NotifyAsync`), R6 바꿈(R4의 다섯 값) | docs/specs/mqtt-notify-short-op/ |
+| 2026-11-19 | tisyn-response-doc | 없음(근거 문서 docs/reference/b540-mqtt-topic.md에 시간 동기 응답·서버 → 장치 수신 분기 분석 기록) | docs/specs/tisyn-response-doc/ |
 
 표에 없는 이전 변경: 기록 없음(docs/server/0001~0003 참조. #1 최초 구현)

@@ -19,9 +19,9 @@ B540(DAWONDNS `B540_W`, ESP8266) 장치를 SoftAP TCP로 설정하는 라이브�
 
 ## 이력
 
-| 날짜 | 작업 | 바꾼 요구 | 변경 폴더 | 작업 문서 |
-|---|---|---|---|---|
-| 2026-11-19 | connectap-v3 | R1~R9 처음 작성. 설정 JSON의 `mqtt_key`(실행마다 임의 생성)와 relaxed 이스케이프 뺌, R6·R7 추가, R8 마스킹 대상을 `pass`만으로 바꿈. 실장비(`DWD-LS120_501f96`, `KT-FTTH-P1-IOT`): 변경 전에는 `respone OK` 뒤에도 공유기 미접속이었고, 변경 후에는 약 4초 만에 `dwapi.dawonai.com` DNS 조회와 서버 `POST /api/v1/devices/register/create`(HTTPS)까지 도달해 두 형식 차이(`mqtt_key`·이스케이프, 어느 쪽인지는 미분리)를 원인으로 확정 | docs/specs/connectap-v3/ | 2026-11-19-connectap-v3.md |
-| 2026-11-19 | device-config-versions | R10 추가(흐름 V1~V4 선택, V1 `MqttKey` 필수), R3(V4 핸드셰이크 건너뛰기)·R5(흐름별 마무리, 정상 종료)·R6(V1 키)·R8(`mqtt_key` 마스킹)·R9(응답을 기다리지 않는 흐름) 바꿈. 실장비(`DWD-LS120_501f96`, 기본 V3): 2026-11-19 11:15:49 송신 후 약 6초 만에 서버 `POST /api/v1/devices/register/create` 수신으로 #11과 같은 결과. V1·V2·V4는 대상 장비가 없어 모의 장치로만 확인 | docs/specs/device-config-versions/ | 2026-11-19-device-config-versions.md |
+| 날짜 | 작업 | 바꾼 요구 | 변경 폴더 |
+|---|---|---|---|
+| 2026-11-19 | connectap-v3 | R1~R9 처음 작성. 설정 JSON의 `mqtt_key`(실행마다 임의 생성)와 relaxed 이스케이프 뺌, R6·R7 추가, R8 마스킹 대상을 `pass`만으로 바꿈. 실장비(B540 실장비 1, 사용자 공유기): 변경 전에는 `respone OK` 뒤에도 공유기 미접속이었고, 변경 후에는 약 4초 만에 `dwapi.dawonai.com` DNS 조회와 서버 `POST /api/v1/devices/register/create`(HTTPS)까지 도달해 두 형식 차이(`mqtt_key`·이스케이프, 어느 쪽인지는 미분리)를 원인으로 확정 | docs/specs/connectap-v3/ |
+| 2026-11-19 | device-config-versions | R10 추가(흐름 V1~V4 선택, V1 `MqttKey` 필수), R3(V4 핸드셰이크 건너뛰기)·R5(흐름별 마무리, 정상 종료)·R6(V1 키)·R8(`mqtt_key` 마스킹)·R9(응답을 기다리지 않는 흐름) 바꿈. 실장비(B540 실장비 1, 기본 V3): 2026-11-19 11:15:49 송신 후 약 6초 만에 서버 `POST /api/v1/devices/register/create` 수신으로 #11과 같은 결과. V1·V2·V4는 대상 장비가 없어 모의 장치로만 확인 | docs/specs/device-config-versions/ |
 
 표에 없는 이전 변경: 기록 없음(docs/cli/0001~0003 참조. #6 최초 구현)

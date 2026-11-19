@@ -8,7 +8,7 @@ public sealed class DeviceIdentityTests
     [TestMethod]
     [DataRow("aabbccddeeff", "aabbccddeeff")]
     [DataRow("AABBCCDDEEFF", "aabbccddeeff")]
-    [DataRow("365F45501f96", "365f45501f96")]
+    [DataRow("1A2B3c4d5e6f", "1a2b3c4d5e6f")]
     public void TryNormalizeMac_Valid(string value, string expected)
     {
         Assert.IsTrue(DeviceIdentity.TryNormalizeMac(value, out string? mac));

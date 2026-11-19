@@ -8,7 +8,7 @@ namespace Biz.Bizadm.PowerManager.DeviceConfig.Mcp.Tests
     {
         private static McpConfiguration Valid() => new()
         {
-            ContentRootPath = @"C:\DeviceConfigMcp",
+            ContentRootPath = @"C:\TestContentRoot",
             OsKms = new OsKmsSection
             {
                 CredentialService = "https://deviceconfig.powermanager.local",

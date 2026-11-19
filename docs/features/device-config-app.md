@@ -14,8 +14,8 @@ B540 장치 설정 라이브러리(`device-config`)를 콘솔에서 실행하는
 
 ## 이력
 
-| 날짜 | 작업 | 바꾼 요구 | 변경 폴더 | 작업 문서 |
-|---|---|---|---|---|
-| 2026-11-19 | device-config-versions | R1~R5 처음 작성. R3에 `Settings.Protocol`·`Settings.MqttKey`(V1 필수), R4에 `MqttKey` 암호화 추가 | docs/specs/device-config-versions/ | 2026-11-19-device-config-versions.md |
+| 날짜 | 작업 | 바꾼 요구 | 변경 폴더 |
+|---|---|---|---|
+| 2026-11-19 | device-config-versions | R1~R5 처음 작성. R3에 `Settings.Protocol`·`Settings.MqttKey`(V1 필수), R4에 `MqttKey` 암호화 추가 | docs/specs/device-config-versions/ |
 
 표에 없는 이전 변경: 기록 없음(docs/cli/0001~0003 참조. #6 최초 구현)

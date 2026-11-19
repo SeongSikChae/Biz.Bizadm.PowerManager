@@ -5,12 +5,12 @@
 
 ## 무엇을, 왜
 
-실장비(`DAWONDNS-M130-W-2ef4322ee8dd`)를 내장 MQTT 브로커(`MqttBrokerHostedService`)에 연결하자 근거 문서(`docs/.tmp/b540-mqtt-topic.md`, B540 펌웨어 덤프 기반)와 다른 메시지가 두 가지 관찰됐다.
+실장비(M130-W 장치 3, 장치 키 `DAWONDNS-M130-W-{mac}`)를 내장 MQTT 브로커(`MqttBrokerHostedService`)에 연결하자 근거 문서(당시 커밋되지 않는 로컬 분석 폴더에 있었음, 지금 `docs/reference/b540-mqtt-topic.md`, B540 펌웨어 덤프 기반)와 다른 메시지가 두 가지 관찰됐다.
 
 1. 근거 문서에 없는 `msg.o` 값 `n`. 브로커는 알 수 없는 오퍼레이션으로 보고 다음 경고만 남긴다.
 
    ```
-   Unknown device operation "n": "DAWONDNS-M130-W-2ef4322ee8dd"
+   Unknown device operation "n": "DAWONDNS-M130-W-{mac}"
    ```
 
 2. 장치 키가 없는 토픽 `/lwt`(Will 메시지로 추정). `DeviceTopic.TryParse`가 실패해 다음 로그만 남는다.

@@ -28,7 +28,7 @@ function device(mac: string, lastRequestedAt: string, overrides: Partial<Device>
 describe("displayValue", () => {
   it("빈 값은 —, 나머지는 그대로", () => {
     expect(displayValue("")).toBe("—");
-    expect(displayValue("2ef4322ee918")).toBe("2ef4322ee918");
+    expect(displayValue("3a0000000101")).toBe("3a0000000101");
   });
 });
 
@@ -110,8 +110,8 @@ describe("정렬", () => {
 
 describe("filterDevices", () => {
   const devices = [
-    device("2ef4322ee918", "2026-11-19T05:00:00+00:00", { modelId: "M130-W", userId: "Alice" }),
-    device("a4cf12b0e3f7", "2026-11-19T05:00:00+00:00", { modelId: "B540", userId: "bob" }),
+    device("3a0000000101", "2026-11-19T05:00:00+00:00", { modelId: "M130-W", userId: "Alice" }),
+    device("5e0000000201", "2026-11-19T05:00:00+00:00", { modelId: "B540", userId: "bob" }),
   ];
   const macs = (q: string) => filterDevices(devices, q).map((d) => d.mac);
 
@@ -121,15 +121,15 @@ describe("filterDevices", () => {
   });
 
   it("MAC 부분 일치, 대소문자 무시, 콜론·하이픈 무시", () => {
-    expect(macs("EE9")).toEqual(["2ef4322ee918"]);
-    expect(macs("2E:F4:32")).toEqual(["2ef4322ee918"]);
-    expect(macs("a4-cf-12")).toEqual(["a4cf12b0e3f7"]);
+    expect(macs("A00")).toEqual(["3a0000000101"]);
+    expect(macs("3A:00:00")).toEqual(["3a0000000101"]);
+    expect(macs("5e-00-00")).toEqual(["5e0000000201"]);
   });
 
   it("모델·사용자 부분 일치, 대소문자 무시", () => {
-    expect(macs("b540")).toEqual(["a4cf12b0e3f7"]);
-    expect(macs("m130")).toEqual(["2ef4322ee918"]);
-    expect(macs("ALI")).toEqual(["2ef4322ee918"]);
+    expect(macs("b540")).toEqual(["5e0000000201"]);
+    expect(macs("m130")).toEqual(["3a0000000101"]);
+    expect(macs("ALI")).toEqual(["3a0000000101"]);
   });
 
   it("구분자만 있는 검색어는 MAC으로 맞추지 않는다", () => {

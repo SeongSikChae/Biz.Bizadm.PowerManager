@@ -11,7 +11,7 @@ const NOW = Date.parse("2026-11-19T06:00:00Z");
 
 function device(i: number, overrides: Partial<Device> = {}): Device {
   return {
-    mac: "2ef4" + i.toString(16).padStart(8, "0"),
+    mac: "3a00" + i.toString(16).padStart(8, "0"),
     userId: "user-01",
     modelId: "M130-W",
     company: "DAWONDNS",
@@ -83,14 +83,14 @@ describe("DevicesPage", () => {
   });
 
   it("열 순서, MAC 원본, 빈 값 —, 등록·마지막 요청 시각을 표시한다", async () => {
-    const withBlank = device(0, { mac: "a4cf12b0e3f7", modelId: "", company: "", userId: "", lastRequestedAt: new Date(NOW - 5 * 60_000).toISOString() });
+    const withBlank = device(0, { mac: "5e0000000201", modelId: "", company: "", userId: "", lastRequestedAt: new Date(NOW - 5 * 60_000).toISOString() });
     respond(json([withBlank, device(10)]));
     renderPage();
 
     await screen.findByRole("table", { name: "장비 목록" });
     expect(screen.getAllByRole("columnheader").map((h) => h.textContent)).toEqual(["MAC", "모델", "제조사", "사용자", "등록", "마지막 요청"]);
     const cells = within(screen.getAllByRole("row")[1]).getAllByRole("cell");
-    expect(cells[0]).toHaveTextContent(/^a4cf12b0e3f7$/);
+    expect(cells[0]).toHaveTextContent(/^5e0000000201$/);
     expect(cells[0]).toHaveClass("font-mono");
     expect(cells[1]).toHaveTextContent(/^—$/);
     expect(cells[2]).toHaveTextContent(/^—$/);
@@ -173,7 +173,7 @@ describe("DevicesPage", () => {
     renderPage();
     await screen.findByText("서버에 등록된 장비 120대");
 
-    await user.type(screen.getByLabelText("장비 검색"), "2ef4");
+    await user.type(screen.getByLabelText("장비 검색"), "3a00");
     await user.click(within(sortHeader("등록")).getByRole("button"));
     await user.click(screen.getByRole("button", { name: "다음 페이지" }));
     await user.click(screen.getByRole("button", { name: "다음 페이지" }));
@@ -182,13 +182,13 @@ describe("DevicesPage", () => {
     await user.click(refreshButton());
     await screen.findByText("장비 목록을 다시 불러오지 못했습니다");
     expect(pageText()).toContain("3 / 3 페이지");
-    expect(screen.getByLabelText("장비 검색")).toHaveValue("2ef4");
+    expect(screen.getByLabelText("장비 검색")).toHaveValue("3a00");
     expect(sortHeader("등록")).toHaveAttribute("aria-sort", "descending");
 
     await user.click(refreshButton());
     await screen.findByText("서버에 등록된 장비 60대");
     expect(pageText()).toContain("2 / 2 페이지");
-    expect(screen.getByLabelText("장비 검색")).toHaveValue("2ef4");
+    expect(screen.getByLabelText("장비 검색")).toHaveValue("3a00");
     expect(sortHeader("등록")).toHaveAttribute("aria-sort", "descending");
 
     // 보정한 페이지(2)가 현재 페이지다. 목록이 다시 늘어도 예전 페이지(3)로 돌아가지 않는다.
@@ -205,32 +205,32 @@ describe("DevicesPage", () => {
 
     expect(sortHeader("마지막 요청")).toHaveAttribute("aria-sort", "descending");
     expect(sortHeader("등록")).toHaveAttribute("aria-sort", "none");
-    expect(macsOnScreen()).toEqual(["2ef400000000", "2ef400000001", "2ef400000002"]);
+    expect(macsOnScreen()).toEqual(["3a0000000000", "3a0000000001", "3a0000000002"]);
 
     await user.click(within(sortHeader("등록")).getByRole("button"));
     expect(sortHeader("등록")).toHaveAttribute("aria-sort", "descending");
     expect(sortHeader("마지막 요청")).toHaveAttribute("aria-sort", "none");
-    expect(macsOnScreen()).toEqual(["2ef400000002", "2ef400000001", "2ef400000000"]);
+    expect(macsOnScreen()).toEqual(["3a0000000002", "3a0000000001", "3a0000000000"]);
 
     await user.click(within(sortHeader("등록")).getByRole("button"));
     expect(sortHeader("등록")).toHaveAttribute("aria-sort", "ascending");
-    expect(macsOnScreen()).toEqual(["2ef400000000", "2ef400000001", "2ef400000002"]);
+    expect(macsOnScreen()).toEqual(["3a0000000000", "3a0000000001", "3a0000000002"]);
   });
 
   it("검색으로 거르고 대수는 전체를 유지하며, 결과가 없으면 지우기 버튼을 보인다", async () => {
     const user = userEvent.setup();
-    respond(json([device(0), device(1, { mac: "a4cf12b0e3f7", modelId: "B540" })]));
+    respond(json([device(0), device(1, { mac: "5e0000000201", modelId: "B540" })]));
     renderPage();
     await screen.findByRole("table", { name: "장비 목록" });
 
     const search = screen.getByLabelText("장비 검색");
     await user.type(search, "b540");
-    expect(macsOnScreen()).toEqual(["a4cf12b0e3f7"]);
+    expect(macsOnScreen()).toEqual(["5e0000000201"]);
     expect(screen.getByText("서버에 등록된 장비 2대")).toBeInTheDocument();
 
     await user.clear(search);
-    await user.type(search, "2E:F4:00");
-    expect(macsOnScreen()).toEqual(["2ef400000000"]);
+    await user.type(search, "3A:00:00");
+    expect(macsOnScreen()).toEqual(["3a0000000000"]);
 
     await user.clear(search);
     await user.type(search, "zzz");
@@ -262,7 +262,7 @@ describe("DevicesPage", () => {
     expect(pageText()).toContain("1 / 2 페이지");
 
     await user.click(screen.getByRole("button", { name: "다음 페이지" }));
-    await user.type(screen.getByLabelText("장비 검색"), "2ef4");
+    await user.type(screen.getByLabelText("장비 검색"), "3a00");
     expect(pageText()).toContain("1 / 2 페이지");
   });
 

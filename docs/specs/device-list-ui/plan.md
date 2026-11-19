@@ -49,7 +49,7 @@
 ```json
 [
   {
-    "mac": "2ef4322ee918",
+    "mac": "{mac}",
     "userId": "user-01",
     "modelId": "M130-W",
     "company": "DAWONDNS",

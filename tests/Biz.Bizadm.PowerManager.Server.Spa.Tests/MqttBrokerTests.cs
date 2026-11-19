@@ -181,8 +181,8 @@ public sealed class MqttBrokerTests
     [TestMethod]
     public async Task M130NotifyShortOperation_DispatchesToNotify()
     {
-        const string clientId = "DAWONDNS-2ef4322ee918";
-        const string notifyTopic = "dwd.v1/DAWONDNS-M130-W-2ef4322ee918/iot-server/notify/json";
+        const string clientId = "DAWONDNS-3a0000000101";
+        const string notifyTopic = "dwd.v1/DAWONDNS-M130-W-3a0000000101/iot-server/notify/json";
         const string shortPayload = """
             {
               "sid":"1",

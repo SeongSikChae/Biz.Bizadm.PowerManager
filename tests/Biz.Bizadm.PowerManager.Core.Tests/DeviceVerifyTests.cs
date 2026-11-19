@@ -11,7 +11,7 @@ public sealed class DeviceVerifyTests
     /// </summary>
     [TestMethod]
     [DataRow("dwmqtt.dawonai.com", "0123456789ab", "AbCdEfGh12345678", "7L.eB2kswATShmfbnM2JFsl6HrH+hkaw4JI3xz0NxU2J")]
-    [DataRow("192.168.0.13", "a1b2c3d4e5f6", "ZzYyXx0987654321", "Twan+BIPL0FDL0nVPvLEKnrfBDga.l0QZew-FJvkyzX1")]
+    [DataRow("192.0.2.10", "a1b2c3d4e5f6", "ZzYyXx0987654321", "Le0=MTDlQIdlTyE4f-GNO05mxB67Me2-OxPb/YTwuetn")]
     [DataRow("iot.example.com", "ffeeddccbbaa", "Q1w2E3r4T5y6U7i8", "Kl.ykhN.6jj-2BLiCbSfI0AtCy-lqqa7uwkVUG+Fk4ZY")]
     [DataRow("dwmqtt.dawonai.com", "000000000001", "abcdefghijklmnopqrst", "q1yTx0-pTP.WJq1TlOxceB306Pys.+ku6t=lQUhlPnU-")]
     public void Compute_MatchesReference(string serverAddr, string mac, string mqttKey, string expected)
@@ -21,7 +21,7 @@ public sealed class DeviceVerifyTests
 
     [TestMethod]
     [DataRow("dwmqtt.dawonai.com")]
-    [DataRow("192.168.0.13")]
+    [DataRow("192.0.2.10")]
     [DataRow("a-b.c=d/e+f")]
     public void IsValidServerAddr_AlphabetOnly_True(string serverAddr)
     {

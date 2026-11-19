@@ -95,9 +95,9 @@ public sealed class AdminDeviceEndpointTests
         DateTimeOffset t2 = t1.AddMinutes(5);
         DateTimeOffset t3 = t1.AddMinutes(10);
         await AddDevicesAsync(app,
-            Device("2ef4322ee918", t2),
-            Device("2ef4322ee8dd", t3),
-            Device("2ef4322ee886", t1, userId: "", modelId: ""),
+            Device("3a0000000101", t2),
+            Device("3a0000000102", t3),
+            Device("3a0000000103", t1, userId: "", modelId: ""),
             Device("0a0000000001", t3));
 
         (int status, string? contentType, string body) = await SendAsync(app, port, "GET", ListPath);
@@ -109,7 +109,7 @@ public sealed class AdminDeviceEndpointTests
 
         using JsonDocument document = JsonDocument.Parse(body);
         JsonElement[] items = document.RootElement.EnumerateArray().ToArray();
-        CollectionAssert.AreEqual(new[] { "0a0000000001", "2ef4322ee8dd", "2ef4322ee918", "2ef4322ee886" },
+        CollectionAssert.AreEqual(new[] { "0a0000000001", "3a0000000102", "3a0000000101", "3a0000000103" },
             items.Select(i => i.GetProperty("mac").GetString()).ToArray());
         foreach (JsonElement item in items)
             CollectionAssert.AreEquivalent(ExpectedFields, item.EnumerateObject().Select(p => p.Name).ToArray());
@@ -150,13 +150,13 @@ public sealed class AdminDeviceEndpointTests
     public async Task List_DevicePort_Returns404ProblemWithoutDevices(int port)
     {
         await using WebApplication app = await StartAsync();
-        await AddDevicesAsync(app, Device("2ef4322ee918", DateTimeOffset.UtcNow));
+        await AddDevicesAsync(app, Device("3a0000000101", DateTimeOffset.UtcNow));
 
         (int status, string? contentType, string body) = await SendAsync(app, port, "GET", ListPath);
 
         Assert.AreEqual(StatusCodes.Status404NotFound, status);
         Assert.AreEqual("application/problem+json", contentType);
-        Assert.IsFalse(body.Contains("2ef4322ee918", StringComparison.Ordinal), body);
+        Assert.IsFalse(body.Contains("3a0000000101", StringComparison.Ordinal), body);
         await app.StopAsync();
     }
 

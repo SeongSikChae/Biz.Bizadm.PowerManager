@@ -2,7 +2,7 @@
 
 ## 요약
 
-`MqttOperation`에 `n` 상수를 더하고, `MqttBrokerHostedService.OnPublishAsync`의 분배 `switch`에서 `notify`와 같은 분기로 `NotifyAsync`에 보낸다. 기존 알 수 없는 오퍼레이션 테스트는 `n` 대신 다른 값을 쓰게 바꾸고, M130-W 형태 페이로드와 `notify` 분배를 확인하는 테스트를 더한다. 근거 문서(`docs/.tmp`, 로컬 전용)에 M130-W 관찰 절을 더하고, 기준 spec의 R4·R6과 이력을 고친다.
+`MqttOperation`에 `n` 상수를 더하고, `MqttBrokerHostedService.OnPublishAsync`의 분배 `switch`에서 `notify`와 같은 분기로 `NotifyAsync`에 보낸다. 기존 알 수 없는 오퍼레이션 테스트는 `n` 대신 다른 값을 쓰게 바꾸고, M130-W 형태 페이로드와 `notify` 분배를 확인하는 테스트를 더한다. 근거 문서(당시 로컬 분석 폴더, 지금 `docs/reference/b540-mqtt-topic.md`)에 M130-W 관찰 절을 더하고, 기준 spec의 R4·R6과 이력을 고친다.
 
 ## 바꿀 파일·구조
 
@@ -12,7 +12,7 @@
   - `RecordingHandler`가 `NotifyAsync`로 받은 `MqttEnvelope`를 `ConcurrentQueue<MqttEnvelope> Notified`에 모은다(`Calls`에는 지금처럼 `"notify"`).
   - `UnknownOperation_LogsClientIdAndRawPayload`의 오퍼레이션을 `n`에서 `zz`로 바꾼다(기대 로그 문자열도).
   - 새 테스트 `M130NotifyShortOperation_DispatchesToNotify`: M130-W 형태 페이로드(`n`)와 `notify` 페이로드를 차례로 발행하고 `rg`로 처리 완료를 확인한다.
-- `docs/.tmp/b540-mqtt-topic.md`(.gitignore 대상, 로컬 전용): M130-W 관찰 절 추가(의미는 추정, 모르는 리소스는 미확인), 3절 오퍼레이션 표 `n` 행 추가(관찰 위치 열에 덤프 오프셋 대신 "M130-W 실통신", 함수 이름 열은 "—"), 머리말 근거 줄·표기 줄(관찰 = 덤프 또는 실장비 통신 로그에 직접 존재)·4절 미확인 항목 정합
+- 근거 문서(당시 .gitignore 대상인 로컬 분석 폴더에 있었음, 지금 `docs/reference/b540-mqtt-topic.md`): M130-W 관찰 절 추가(의미는 추정, 모르는 리소스는 미확인), 3절 오퍼레이션 표 `n` 행 추가(관찰 위치 열에 덤프 오프셋 대신 "M130-W 실통신", 함수 이름 열은 "—"), 머리말 근거 줄·표기 줄(관찰 = 덤프 또는 실장비 통신 로그에 직접 존재)·4절 미확인 항목 정합
 - `docs/features/mqtt-broker.md`(기준 spec): 설명 문단, R4·R6 갱신, 이력 한 줄 추가. `파일:` 줄은 바꾸지 않음(바꾸는 코드·테스트 파일이 이미 들어 있고 새 파일이 없다)
 
 ## 결정
@@ -38,7 +38,7 @@
   }
   ```
 
-  토픽은 `dwd.v1/DAWONDNS-M130-W-2ef4322ee918/iot-server/notify/json`, ClientId는 `DAWONDNS-2ef4322ee918`.
+  토픽은 `dwd.v1/DAWONDNS-M130-W-{mac}/iot-server/notify/json`, ClientId는 `DAWONDNS-{mac}`.
 
 ## 오류·위험
 
@@ -58,4 +58,4 @@
 ## 원칙 점검
 
 - 적용 규칙: `workflow/spec-driven.md`(절차·기준 spec), `git/github-issue.md`(이슈 #14), `workflow/conversation-language.md`·전역 언어 규칙(대화는 한국어, 코드·주석은 저장소 관례대로 주석 한국어), `dotnet/project-creation.md`(MSTest 유지, 새 프로젝트 없음), `dotnet/server-spa-template.md`(로깅 구성 유지), `shell/powershell-windows.md`(검증 명령), `git/commit-message.md`(커밋 시)
-- 충돌: 근거 문서 `docs/.tmp/b540-mqtt-topic.md`가 .gitignore 대상이라 기준점·구현 후 검토 git diff에 들어가지 않는다(spec-driven 5절은 기준점부터의 diff 전체를 요구). 사용자가 그 파일에 기록하기로 정했으므로 따르지 않는 대신, 수정 전 사본과의 diff를 구현 후 검토에 따로 넘겨 검토 범위에 넣는다.
+- 충돌: 근거 문서(지금 `docs/reference/b540-mqtt-topic.md`)가 당시 .gitignore 대상인 로컬 분석 폴더에 있어 기준점·구현 후 검토 git diff에 들어가지 않는다(spec-driven 5절은 기준점부터의 diff 전체를 요구). 사용자가 그 파일에 기록하기로 정했으므로 따르지 않는 대신, 수정 전 사본과의 diff를 구현 후 검토에 따로 넘겨 검토 범위에 넣는다.

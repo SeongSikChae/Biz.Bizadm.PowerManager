@@ -58,8 +58,8 @@
 
 ## 단계 6: 배포·실장비
 
-- [x] T029 `FolderProfile`로 MCP 게시, MCP가 꺼져 있는지 확인(켜져 있으면 사용자에게 중지 요청), 기존 exe·pdb 백업 뒤 exe·pdb만 교체 (C:\Bizadm.PowerManager.Config) — C11
-- [x] T030 사용자가 MCP를 시작하면 `DWD-LS120_501f96`에 `ConnectAp`(설정 파일 값 그대로, V3)를 보내고 서버 로그의 `POST /api/v1/devices/register/create`를 확인, 결과를 작업 문서와 `device-config` 이력에 기록 (docs/features/device-config.md) — C11
+- [x] T029 `FolderProfile`로 MCP 게시, MCP가 꺼져 있는지 확인(켜져 있으면 사용자에게 중지 요청), 기존 exe·pdb 백업 뒤 exe·pdb만 교체 (MCP 로컬 배포 폴더) — C11
+- [x] T030 사용자가 MCP를 시작하면 B540 실장비 1에 `ConnectAp`(설정 파일 값 그대로, V3)를 보내고 서버 로그의 `POST /api/v1/devices/register/create`를 확인, 결과를 작업 문서와 `device-config` 이력에 기록 (docs/features/device-config.md) — C11
 
 체크포인트: 서버 로그에 `register/create` 요청이 있고 결과가 기록됨
 

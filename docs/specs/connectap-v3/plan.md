@@ -2,7 +2,7 @@
 
 ## 요약
 
-`DeviceSettings.ToJson`에서 `mqtt_key` 인자와 키를 없애고, 직렬화 옵션을 `System.Text.Json` 기본 인코더로 바꾼다. `DeviceClient.ConnectApAsync`는 `MqttKeyGenerator` 호출을 없애고 나머지 흐름(핸드셰이크 → `apscan` → Wi-Fi 선택 → 설정 JSON → `connectap`)은 그대로 둔다. 쓰는 곳이 없어지는 `MqttKeyGenerator`와 그 테스트는 지운다. 테스트를 C1~C4에 맞게 고치고, 기능 `device-config`의 기준 spec을 새로 만든다. 마지막으로 MCP를 다시 게시·배포해 `DWD-LS120_501f96`로 실장비 시험을 한다(C6).
+`DeviceSettings.ToJson`에서 `mqtt_key` 인자와 키를 없애고, 직렬화 옵션을 `System.Text.Json` 기본 인코더로 바꾼다. `DeviceClient.ConnectApAsync`는 `MqttKeyGenerator` 호출을 없애고 나머지 흐름(핸드셰이크 → `apscan` → Wi-Fi 선택 → 설정 JSON → `connectap`)은 그대로 둔다. 쓰는 곳이 없어지는 `MqttKeyGenerator`와 그 테스트는 지운다. 테스트를 C1~C4에 맞게 고치고, 기능 `device-config`의 기준 spec을 새로 만든다. 마지막으로 MCP를 다시 게시·배포해 B540 실장비 1로 실장비 시험을 한다(C6).
 
 ## 바꿀 파일·구조
 
@@ -22,7 +22,7 @@
 - 기본 인코더 사용: V3(`JsonSerializer.Serialize(config)`)와 같은 결과를 내려면 옵션 없이 직렬화하면 된다 / 검토한 대안: `JavaScriptEncoder.Default`를 명시한 옵션 필드 — 결과는 같지만 필드가 남을 이유가 없어 고르지 않음
 - `MqttKeyGenerator` 삭제: 유일한 호출자(`DeviceClient`)에서 빠져 죽은 코드가 된다. 서버 발급 키를 넣는 흐름은 서버 REST 구현 때 따로 정한다 / 검토한 대안: 남겨 두기 — 쓰는 곳이 없고 테스트만 유지 비용이 들어 고르지 않음
 - `Dictionary<string,string>` 유지: 키 순서는 삽입 순서로 직렬화되며 지금도 이 동작에 기대고 있다. 순서를 테스트로 고정해(C1) 바뀌면 드러나게 한다 / 검토한 대안: V3처럼 속성 순서가 있는 record — 키 이름 매핑을 새로 만들어야 하고 이번 범위(데이터 형식)보다 커서 고르지 않음
-- 배포: `src/Biz.Bizadm.PowerManager.DeviceConfig.Mcp/Properties/PublishProfiles/FolderProfile.pubxml`(Release, win-x64, 자체 포함 단일 파일)로 게시해 결과의 exe·pdb만 `C:\Bizadm.PowerManager.Config`에 덮어쓴다. `config.yml`·`deviceconfig.dek`·`log`는 건드리지 않는다. 덮어쓰기 전에 기존 exe·pdb를 스크래치에 백업한다. MCP 시작·중지는 사용자가 평소 방식(콘솔 또는 서비스 `DeviceConfigMcp`)으로 한다 / 검토한 대안: 서비스 재등록 — 등록 정보(실행 경로·계정)는 바뀌지 않아 불필요
+- 배포: `src/Biz.Bizadm.PowerManager.DeviceConfig.Mcp/Properties/PublishProfiles/FolderProfile.pubxml`(Release, win-x64, 자체 포함 단일 파일)로 게시해 결과의 exe·pdb만 MCP 로컬 배포 폴더에 덮어쓴다. `config.yml`·`deviceconfig.dek`·`log`는 건드리지 않는다. 덮어쓰기 전에 기존 exe·pdb를 스크래치에 백업한다. MCP 시작·중지는 사용자가 평소 방식(콘솔 또는 서비스 `DeviceConfigMcp`)으로 한다 / 검토한 대안: 서비스 재등록 — 등록 정보(실행 경로·계정)는 바뀌지 않아 불필요
 
 ## 인터페이스·데이터
 
@@ -32,10 +32,10 @@
 
 ## 오류·위험
 
-- 장치 파서가 `\uXXXX`를 풀지 못하면, 비밀번호에 `+ & < > '`·비ASCII가 있을 때 저장값이 달라진다. V3가 같은 방식이라 받아들인다(spec). 지금 `KT-FTTH-P1-IOT` 비밀번호에 이 문자가 있는지는 모른다(평문을 보지 않는다).
+- 장치 파서가 `\uXXXX`를 풀지 못하면, 비밀번호에 `+ & < > '`·비ASCII가 있을 때 저장값이 달라진다. V3가 같은 방식이라 받아들인다(spec). 지금 사용자 공유기 비밀번호에 이 문자가 있는지는 모른다(평문을 보지 않는다).
 - 실행 중인 MCP exe는 덮어쓸 수 없다. 배포 전에 MCP가 꺼져 있는지 확인하고, 켜져 있으면 사용자에게 중지를 요청한다.
-- C6 관찰 수단(DNS 서버 `20.200.215.194`의 `tcpdump`)은 원격 서버 상태에 달려 있다. 접속하지 못하면 이 PC의 서버 포트 연결과 SoftAP 채널 변화만으로 관찰하고 그 사실을 기록한다.
-- 실장비 상태 변경(`ConnectAp`)은 대상 SSID `DWD-LS120_501f96`을 사용자가 지정한 것으로만 한다.
+- C6 관찰 수단(사용자 측 DNS 서버의 `tcpdump`)은 원격 서버 상태에 달려 있다. 접속하지 못하면 이 PC의 서버 포트 연결과 SoftAP 채널 변화만으로 관찰하고 그 사실을 기록한다.
+- 실장비 상태 변경(`ConnectAp`)은 대상 SSID B540 실장비 1을 사용자가 지정한 것으로만 한다.
 
 ## 검증 전략
 
@@ -44,7 +44,7 @@
 - C3: `DeviceSettingsTests` 마스킹 검사(`pass`만 `***`, 원문 없음), `DeviceClientTests`의 정상·시간 초과·연결 종료 세 경우에서 로그·예외에 원문 `pass`와 이스케이프된 `pass`가 없음을 확인
 - C4: `DeviceClientTests.ConnectApAsync_OneConnectionInOrder`의 송신 다섯 줄 순서·`connectap` 줄 검사와 `ConnectApAsync_NotOk_Throws` 유지
 - C5: `dotnet build Biz.Bizadm.PowerManager.slnx -warnaserror`와 `dotnet test --solution Biz.Bizadm.PowerManager.slnx` 실행 결과(Microsoft.Testing.Platform. `Device` 카테고리는 테스트 프로젝트의 `TestingPlatformCommandLineArguments`가 기본으로 뺀다)
-- C6: 게시·배포 후 사용자가 MCP를 시작하면 `run_device_commands`로 `DWD-LS120_501f96`에 `ConnectAp`(`KT-FTTH-P1-IOT`, 설정 파일 값 그대로)를 보내고, 약 90초 동안 DNS 서버 `tcpdump`(53번)의 `dwapi`/`dwmqtt` 조회, 이 PC 서버 포트(`18443`·`8883`) 연결, 장치 SoftAP 유무·채널을 관찰해 작업 문서와 기준 spec 이력에 결과와 판정(접속하면 원인 확정, 아니면 보류)을 적는다
+- C6: 게시·배포 후 사용자가 MCP를 시작하면 `run_device_commands`로 B540 실장비 1에 `ConnectAp`(사용자 공유기, 설정 파일 값 그대로)를 보내고, 약 90초 동안 DNS 서버 `tcpdump`(53번)의 `dwapi`/`dwmqtt` 조회, 이 PC 서버 포트(`18443`·`8883`) 연결, 장치 SoftAP 유무·채널을 관찰해 작업 문서와 기준 spec 이력에 결과와 판정(접속하면 원인 확정, 아니면 보류)을 적는다
 
 ## 원칙 점검
 

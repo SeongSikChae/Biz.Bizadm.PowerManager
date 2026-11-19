@@ -5,7 +5,7 @@
 ## 설정
 
 ```yaml
-ContentRootPath: D:\DeviceConfigMcp      # 절대 경로
+ContentRootPath: <설치 폴더>             # 절대 경로
 OsKms:
   CredentialService: https://deviceconfig.powermanager.local
   CredentialAccount: deviceconfig
@@ -38,7 +38,7 @@ MCP endpoint: `http://127.0.0.1:<Http.Port>/mcp`
 ## 콘솔 실행
 
 ```powershell
-D:\DeviceConfigMcp\Biz.Bizadm.PowerManager.DeviceConfig.Mcp.exe --config D:\DeviceConfigMcp\config.yaml --log D:\DeviceConfigMcp\log
+<설치 폴더>\Biz.Bizadm.PowerManager.DeviceConfig.Mcp.exe --config <설치 폴더>\config.yaml --log <설치 폴더>\log
 ```
 
 Ctrl+C로 종료한다. 종료 코드는 정상 0, 인수 오류 1, 설정 오류 2, 실행 오류(포트 사용 중 등) 3이다.
@@ -48,7 +48,7 @@ Ctrl+C로 종료한다. 종료 코드는 정상 0, 인수 오류 1, 설정 오�
 관리자 PowerShell에서 실행한다. 등호(`=`) 뒤에는 공백이 하나 있어야 한다.
 
 ```powershell
-sc.exe create DeviceConfigMcp binPath= "D:\DeviceConfigMcp\Biz.Bizadm.PowerManager.DeviceConfig.Mcp.exe --config D:\DeviceConfigMcp\config.yaml --log D:\DeviceConfigMcp\log" start= auto obj= ".\<Windows 로그인 계정>" password= "<계정 비밀번호>"
+sc.exe create DeviceConfigMcp binPath= "<설치 폴더>\Biz.Bizadm.PowerManager.DeviceConfig.Mcp.exe --config <설치 폴더>\config.yaml --log <설치 폴더>\log" start= auto obj= ".\<Windows 로그인 계정>" password= "<계정 비밀번호>"
 ```
 
 `sc.exe`로 계정을 지정하면 그 계정에 "서비스로 로그온" 권한이 주어지지 않아 시작이 오류 1069로 실패할 수 있다. 시작하기 전에 서비스 관리 콘솔(`services.msc`)에서 DeviceConfigMcp 속성 > 로그온 탭을 열어 같은 계정과 비밀번호를 한 번 다시 입력한다(이때 권한이 함께 주어진다).

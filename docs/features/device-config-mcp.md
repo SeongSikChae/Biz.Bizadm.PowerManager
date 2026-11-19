@@ -20,9 +20,9 @@ B540 장치 설정(장치 AP 접속 → 명령 실행 → PC Wi-Fi 복구)을 MC
 
 ## 이력
 
-| 날짜 | 작업 | 바꾼 요구 | 변경 폴더 | 작업 문서 |
-|---|---|---|---|---|
-| 2026-11-18 | mcp-http-transport | R1~R11 처음 작성. stdio 전송·stdout MCP 전용·command/args 등록·stdin 종료 정상 종료·단일 인스턴스 전제(0001·0002) 뺌, R1~R4·R11 추가, R2 포트 필수 | docs/specs/mcp-http-transport/ | 2026-11-18-mcp-http-transport.md |
-| 2026-11-19 | device-config-versions | R6(`Settings.Protocol`·`Settings.MqttKey`와 `MqttKey` 암호화)·R9(`settings.protocol`, V1 `MqttKey` 검사) 바꿈 | docs/specs/device-config-versions/ | 2026-11-19-device-config-versions.md |
+| 날짜 | 작업 | 바꾼 요구 | 변경 폴더 |
+|---|---|---|---|
+| 2026-11-18 | mcp-http-transport | R1~R11 처음 작성. stdio 전송·stdout MCP 전용·command/args 등록·stdin 종료 정상 종료·단일 인스턴스 전제(0001·0002) 뺌, R1~R4·R11 추가, R2 포트 필수 | docs/specs/mcp-http-transport/ |
+| 2026-11-19 | device-config-versions | R6(`Settings.Protocol`·`Settings.MqttKey`와 `MqttKey` 암호화)·R9(`settings.protocol`, V1 `MqttKey` 검사) 바꿈 | docs/specs/device-config-versions/ |
 
 표에 없는 이전 변경: 기록 없음(docs/mcp/0001~0005 참조. #7 최초 구현, #8 nullable 출력, #9 settings 인자)

@@ -29,6 +29,6 @@
 
 ## 이력
 
-| 날짜 | 작업 | 바꾼 요구 | 변경 폴더 | 작업 문서 |
-|---|---|---|---|---|
-| 2026-11-19 | device-list-ui | R1~R13 처음 작성(장비 목록 API·화면 신설, #17) | docs/specs/device-list-ui/ | 2026-11-19-device-list-ui.md |
+| 날짜 | 작업 | 바꾼 요구 | 변경 폴더 |
+|---|---|---|---|
+| 2026-11-19 | device-list-ui | R1~R13 처음 작성(장비 목록 API·화면 신설, #17) | docs/specs/device-list-ui/ |

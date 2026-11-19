@@ -44,8 +44,8 @@
 - 400 응답: `Problem(statusCode: 400, title: "Invalid mac")`(ProblemDetails). `[ApiController]` 모델 검증은 쓰지 않는다(모든 속성 nullable)
 - 404 응답(C11): `Problem(statusCode: 404, title: "Device not found")`
 - C8 로그 형식: `MQTT client connecting: clientId={ClientId}, userName={UserName}, hasPassword={HasPassword}, passwordCheck={PasswordCheck}` — `PasswordCheck`는 `Match`·`Mismatch`·`Unknown`. 비밀번호 비교는 `CryptographicOperations.FixedTimeEquals`(UTF-8 바이트)
-- C3 실측 대조: `DeviceVerifyTests.RealDawonResponse_Matches`는 환경 변수 `POWERMANAGER_DAWON_RESPONSE`(응답 JSON 파일 경로)와 `POWERMANAGER_DAWON_MAC`이 있을 때만 실행하고 없으면 `Assert.Inconclusive`. 검증 때 DevServer의 `dawon-resp.json`을 스크래치로 복사해 이 테스트만 실행하고, 복사본은 끝나면 지운다. 실제 값은 저장소·로그에 남기지 않는다 / 검토한 대안: 별도 콘솔 실행 — 서버 구현을 그대로 부르는 데 테스트가 더 간단해 고르지 않음
-- C3 자동 테스트 시험 값: 구현 전에 DevServer에서 Python 참조 계산(다원 응답과 일치 확인한 것)으로 가상 입력 4개(`server_addr` `dwmqtt.dawonai.com`·`192.168.0.13`·`iot.example.com`, mac·키는 가짜)의 `verify`를 만들어 테스트 상수로 넣는다
+- C3 실측 대조: `DeviceVerifyTests.RealDawonResponse_Matches`는 환경 변수 `POWERMANAGER_DAWON_RESPONSE`(응답 JSON 파일 경로)와 `POWERMANAGER_DAWON_MAC`이 있을 때만 실행하고 없으면 `Assert.Inconclusive`. 검증 때 분석 서버의 실제 다원 응답 캡처를 스크래치로 복사해 이 테스트만 실행하고, 복사본은 끝나면 지운다. 실제 값은 저장소·로그에 남기지 않는다 / 검토한 대안: 별도 콘솔 실행 — 서버 구현을 그대로 부르는 데 테스트가 더 간단해 고르지 않음
+- C3 자동 테스트 시험 값: 구현 전에 분석 서버에서 Python 참조 계산(다원 응답과 일치 확인한 것)으로 가상 입력 4개(`server_addr` `dwmqtt.dawonai.com`·사설망 IP 주소·`iot.example.com`, mac·키는 가짜)의 `verify`를 만들어 테스트 상수로 넣는다
 
 ## 인터페이스·데이터
 
@@ -59,8 +59,8 @@
 - SQLite 연결 풀이 파일을 잡고 있어 테스트 임시 폴더 삭제가 실패할 수 있다 → `TestApp`으로 앱을 띄우는 모든 테스트 클래스(`PipelineTests`·`DeviceEndpointTests`·`MqttBrokerTests`)의 정리에서 `TestApp.DeleteTempRoot`(풀 비운 뒤 삭제)를 쓴다
 - 설치된 `dotnet-ef`는 11.0.0이고 프로젝트 EF는 10.0.15다. 마이그레이션 생성이 실패하면 `dotnet-ef` 10.0.15를 도구 매니페스트 없이 `dotnet tool run` 대신 임시로 쓰는 방법을 사용자에게 묻는다(미추적 매니페스트는 사용자 파일이라 고치지 않음)
 - MQTTnet 5의 `ValidatingConnectionEventArgs`에 이벤트를 구독하면 기본 `ReasonCode`가 성공인지 확인해야 한다. 테스트(C8)에서 모든 경우 접속 성공을 함께 확인한다
-- 배포본(`C:\Bizadm.PowerManager`)은 실행 중일 수 있다. 덮어쓰기 전에 실행 방식(직접 실행·IIS)을 확인하고 사용자에게 알린 뒤 멈추고 바꾼다. DB 파일은 `ContentRootPath`(`C:\Bizadm.PowerManager\powermanager.db`)에 생긴다
-- 실장비 설정(ConnectAp)·재부팅은 장치 상태를 바꾸므로 대상 SSID(`DWD-LS120_501f96`)를 사용자에게 확인받은 뒤 한다
+- 배포본(서버 로컬 배포 폴더)은 실행 중일 수 있다. 덮어쓰기 전에 실행 방식(직접 실행·IIS)을 확인하고 사용자에게 알린 뒤 멈추고 바꾼다. DB 파일은 `ContentRootPath`(서버 로컬 배포 폴더의 `powermanager.db`)에 생긴다
+- 실장비 설정(ConnectAp)·재부팅은 장치 상태를 바꾸므로 대상 SSID(B540 실장비 1의 장치 AP)를 사용자에게 확인받은 뒤 한다
 
 ## 검증 전략
 

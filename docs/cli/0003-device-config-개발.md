@@ -534,9 +534,9 @@ public sealed class RealDeviceTests
 }
 ```
 
-`Reboot`·`TestFactoryReset`는 실장비 결과로 처리 방식을 정한 뒤 `DeviceClient`에 반영한다. 후보: ① 응답 `{"mac":"…","respone":"reboot"}`(정적 분석 `docs/.tmp/b540-tcp-config.md` 2절)이 오면 그 값을 확인(`EnsureOk` 적용 안 함) ② 송신 후 응답 대기 없이 성공 ③ 타임아웃·연결 종료를 경고 후 성공. `{"command":"reboot"}`에 응답이 없으면 `connectap`처럼 mac을 넣은 `{"mac":"<mac>","command":"reboot"}`도 시험해 비교한다.
+`Reboot`·`TestFactoryReset`는 실장비 결과로 처리 방식을 정한 뒤 `DeviceClient`에 반영한다. 후보: ① 응답 `{"mac":"…","respone":"reboot"}`(정적 분석 `docs/reference/b540-tcp-config.md` 2절)이 오면 그 값을 확인(`EnsureOk` 적용 안 함) ② 송신 후 응답 대기 없이 성공 ③ 타임아웃·연결 종료를 경고 후 성공. `{"command":"reboot"}`에 응답이 없으면 `connectap`처럼 mac을 넣은 `{"mac":"<mac>","command":"reboot"}`도 시험해 비교한다.
 
-U8 결과(2026-11-11, `DWD-LS120_501f96`): `ConnectAp`는 설정 JSON·`connectap` 모두 `respone: OK`(로그의 `pass`·`mqtt_key`는 `***`). PC가 공유기에 연결된 상태에서 시작하자 복구 후 연결 해제로 끝나는 결함이 드러났다. 원인은 Windows `RestoreAsync`가 재연결 요청 뒤 연결 중인 임시 프로필을 지워 재연결이 취소된 것으로, 임시 프로필을 먼저 지우고 재연결하도록 고쳤다(삭제 실패는 로그 후 재연결, 재연결 예외 우선). 수정 후 공유기 연결 상태·연결 해제 상태 시작 모두 원래 상태로 복구됨을 확인했다.
+U8 결과(2026-11-11, B540 실장비 1): `ConnectAp`는 설정 JSON·`connectap` 모두 `respone: OK`(로그의 `pass`·`mqtt_key`는 `***`). PC가 공유기에 연결된 상태에서 시작하자 복구 후 연결 해제로 끝나는 결함이 드러났다. 원인은 Windows `RestoreAsync`가 재연결 요청 뒤 연결 중인 임시 프로필을 지워 재연결이 취소된 것으로, 임시 프로필을 먼저 지우고 재연결하도록 고쳤다(삭제 실패는 로그 후 재연결, 재연결 예외 우선). 수정 후 공유기 연결 상태·연결 해제 상태 시작 모두 원래 상태로 복구됨을 확인했다.
 
 `Reboot`·`TestFactoryReset` 결과: `Reboot`·`TestFactoryReset` 모두 응답·연결 종료 없이 10s 타임아웃, mac 포함 reboot도 15s 동안 같음, 약 40s 뒤 재접속 정상. 사용자 결정으로 ③ "대기 시간 초과·연결 종료는 경고 후 성공"을 채택해 `DeviceClient.RequestOrWarnAsync`로 반영했다(송신 형식은 `{"command":"reboot"}` 유지). 설계 5.2절 표를 갱신했다.
 

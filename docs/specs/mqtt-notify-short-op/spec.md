@@ -5,7 +5,7 @@
 
 ## 무엇을, 왜
 
-#12에서 더한 로그(`docs/specs/mqtt-unknown-op-log/`)로 M130-W 실장비 3대(`DAWONDNS-M130-W-2ef4322ee918`, `…ee886`, `…ee8dd`, 펌웨어 `2.01.58`)의 메시지를 확인했다(2026-11-19). 세 대 모두 `msg.o`가 근거 문서(`docs/.tmp/b540-mqtt-topic.md`, B540 덤프 기반)의 `notify`가 아닌 `n`이어서, 브로커(`MqttBrokerHostedService`)는 알 수 없는 오퍼레이션 경고(기준 spec R6)만 남기고 `NotifyAsync`로 분배하지 않는다.
+#12에서 더한 로그(`docs/specs/mqtt-unknown-op-log/`)로 M130-W 실장비 3대(장치 1·2·3, 장치 키 `DAWONDNS-M130-W-{mac}`, 펌웨어 `2.01.58`)의 메시지를 확인했다(2026-11-19). 세 대 모두 `msg.o`가 근거 문서(`docs/reference/b540-mqtt-topic.md`, B540 덤프 기반)의 `notify`가 아닌 `n`이어서, 브로커(`MqttBrokerHostedService`)는 알 수 없는 오퍼레이션 경고(기준 spec R6)만 남기고 `NotifyAsync`로 분배하지 않는다.
 
 관찰한 형태:
 
@@ -31,6 +31,6 @@
 - C1. 장치 → 서버 메시지의 `msg.o`가 `n`이면 `NotifyAsync`로 한 번 분배된다. `notify`도 지금처럼 `NotifyAsync`로 분배된다.
 - C2. `msg.o`가 `n`인 메시지는 알 수 없는 오퍼레이션 경고(`Unknown device operation`)를 남기지 않는다. `rg`·`drg`·`tisyn`·`notify`·`n`이 아닌 오퍼레이션은 지금처럼 기준 spec R6의 경고를 남긴다. 기존 테스트 `UnknownOperation_LogsClientIdAndRawPayload`는 `n` 대신 이 다섯 값이 아닌 오퍼레이션을 쓰도록 바꾸고, 이 R6 경고 유지를 그 테스트로 확인한다.
 - C3. 관찰한 M130-W 형태의 메시지(토픽 `dwd.v1/DAWONDNS-M130-W-{mac}/iot-server/notify/json`, 줄바꿈이 든 JSON, `sid`·`sv`가 JSON 문자열이고 요소마다 `n`·`sv`·`ti`(관찰값 `""`))를 받으면 해석 실패 경고 없이 `NotifyAsync`로 분배되고, 분배된 요소의 경로(`n`)와 문자열 값(`sv`)이 페이로드와 같다.
-- C4. 근거 문서 `docs/.tmp/b540-mqtt-topic.md`에 M130-W 관찰 절이 있고, 토픽·ClientId·`msg.o` `n`·`ti` 필드·관찰한 리소스 경로를 적되 리소스 의미는 **추정**으로, 의미를 모르는 리소스는 **미확인**으로 표기한다(근거 문서 머리말의 표기 용어). 머리말 표기 줄의 **관찰** 정의가 덤프뿐 아니라 실장비 통신 로그에 직접 있는 것까지 포함하고, 머리말 근거 줄과 4절 미확인 항목이 M130-W 실통신 관찰이 있다는 사실과 어긋나지 않는다. 3절 오퍼레이션 코드 표에 `n` 행(M130-W 실통신 관찰, 상태 보고)이 있다.
+- C4. 근거 문서(당시 커밋되지 않는 로컬 분석 폴더에 있었음, 지금 `docs/reference/b540-mqtt-topic.md`)에 M130-W 관찰 절이 있고, 토픽·ClientId·`msg.o` `n`·`ti` 필드·관찰한 리소스 경로를 적되 리소스 의미는 **추정**으로, 의미를 모르는 리소스는 **미확인**으로 표기한다(근거 문서 머리말의 표기 용어). 머리말 표기 줄의 **관찰** 정의가 덤프뿐 아니라 실장비 통신 로그에 직접 있는 것까지 포함하고, 머리말 근거 줄과 4절 미확인 항목이 M130-W 실통신 관찰이 있다는 사실과 어긋나지 않는다. 3절 오퍼레이션 코드 표에 `n` 행(M130-W 실통신 관찰, 상태 보고)이 있다.
 - C5. 기준 spec `docs/features/mqtt-broker.md`의 요구가 `n` 분배를 반영하고(R4·R6), 이력에 이번 작업이 한 줄 있다.
 - C6. C1~C3을 확인하는 자동 테스트가 있고, 기존 테스트와 함께 모두 통과한다.

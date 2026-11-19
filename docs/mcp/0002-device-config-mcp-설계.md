@@ -62,7 +62,7 @@ public Task RunAsync(Action<DeviceCommandResult>? onCommandCompleted, Cancellati
 App 설정에서 `Commands`만 뺀 형식이다. 키는 속성 이름 그대로(PascalCase).
 
 ```yaml
-ContentRootPath: D:\DeviceConfigMcp      # 절대 경로 가정(2절)
+ContentRootPath: <설치 폴더>             # 절대 경로 가정(2절)
 OsKms:                    # 필수 (App과 같음)
   CredentialService: https://deviceconfig.powermanager.local
   CredentialAccount: deviceconfig

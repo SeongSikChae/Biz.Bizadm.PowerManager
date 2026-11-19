@@ -29,8 +29,8 @@
 
 ## 단계 4: 배포·실장비 시험
 
-- [x] T010 `FolderProfile`로 MCP 게시(`dotnet publish src/Biz.Bizadm.PowerManager.DeviceConfig.Mcp -p:PublishProfile=FolderProfile`), MCP가 꺼져 있는지 확인, 기존 exe·pdb를 스크래치에 백업한 뒤 게시 결과의 exe·pdb만 덮어쓰기 (C:\Bizadm.PowerManager.Config) — C6
-- [x] T011 사용자가 MCP를 시작하면 DNS 서버 `tcpdump`(53번)를 시작하고 `DWD-LS120_501f96`에 `ConnectAp`(`KT-FTTH-P1-IOT`, 설정 파일 값 그대로) 전송, 약 90초 동안 `dwapi`/`dwmqtt` 조회·이 PC `18443`·`8883` 연결·SoftAP 유무와 채널을 관찰 — C6
+- [x] T010 `FolderProfile`로 MCP 게시(`dotnet publish src/Biz.Bizadm.PowerManager.DeviceConfig.Mcp -p:PublishProfile=FolderProfile`), MCP가 꺼져 있는지 확인, 기존 exe·pdb를 스크래치에 백업한 뒤 게시 결과의 exe·pdb만 덮어쓰기 (MCP 로컬 배포 폴더) — C6
+- [x] T011 사용자가 MCP를 시작하면 DNS 서버 `tcpdump`(53번)를 시작하고 B540 실장비 1에 `ConnectAp`(사용자 공유기, 설정 파일 값 그대로) 전송, 약 90초 동안 `dwapi`/`dwmqtt` 조회·이 PC `18443`·`8883` 연결·SoftAP 유무와 채널을 관찰 — C6
 - [x] T012 관찰 결과와 판정(접속하면 두 형식 차이를 원인으로 확정, 아니면 보류)을 기준 spec 이력 줄과 작업 문서에 기록 (docs/features/device-config.md) — C6
 
 체크포인트: 작업 문서와 기준 spec에 C6 결과·판정이 있음
