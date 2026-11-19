@@ -1,5 +1,6 @@
 using Biz.Bizadm.PowerManager.Core.Devices;
 using Biz.Bizadm.PowerManager.Server.Core;
+using Biz.Bizadm.PowerManager.Server.Spa.Relay;
 using System.Configuration;
 using System.Configuration.Annotation;
 
@@ -57,6 +58,11 @@ namespace Biz.Bizadm.PowerManager.Server.Spa
 
         public TlsConfiguration? Tls { get; set; }
 
+        /// <summary>
+        /// 다원 서버 중계 모드. 없으면 꺼짐과 같다.
+        /// </summary>
+        public DawonRelayConfiguration? DawonRelay { get; set; }
+
         public void Validate()
         {
             if (!DeviceVerify.IsValidServerAddr(DeviceMqttServerAddr))
@@ -65,6 +71,8 @@ namespace Biz.Bizadm.PowerManager.Server.Spa
             ConfigurationValidator.Validate(OsKms);
             if (Tls is not null)
                 ConfigurationValidator.Validate(Tls);
+            if (DawonRelay is not null)
+                ConfigurationValidator.Validate(DawonRelay);
         }
     }
 }

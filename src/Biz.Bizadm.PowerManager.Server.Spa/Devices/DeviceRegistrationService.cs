@@ -32,6 +32,54 @@ namespace Biz.Bizadm.PowerManager.Server.Spa.Devices
         }
 
         /// <summary>
+        /// 중계 모드에서 다원이 발급한 키를 mac(정규화된 소문자)에 저장한다. 처음이면 새로 만들고, 이미 있으면 키를 바꾸며
+        /// 비어 있지 않은 값만 갱신한다. 같은 mac의 첫 등록이 동시에 들어와 충돌하면 한 번 다시 시도해 마지막 키로 갱신한다.
+        /// </summary>
+        public async Task StoreRelayedKeyAsync(string mac, string? userId, string? modelId, string? company, string mqttKey, CancellationToken cancellationToken)
+        {
+            try
+            {
+                await StoreRelayedKeyOnceAsync(mac, userId, modelId, company, mqttKey, cancellationToken);
+            }
+            catch (DbUpdateException)
+            {
+                await StoreRelayedKeyOnceAsync(mac, userId, modelId, company, mqttKey, cancellationToken);
+            }
+        }
+
+        private async Task StoreRelayedKeyOnceAsync(string mac, string? userId, string? modelId, string? company, string mqttKey, CancellationToken cancellationToken)
+        {
+            DateTimeOffset now = timeProvider.GetUtcNow();
+            await using PowerManagerDbContext db = await factory.CreateDbContextAsync(cancellationToken);
+            DeviceRegistration? device = await db.Devices.SingleOrDefaultAsync(d => d.Mac == mac, cancellationToken);
+            if (device is null)
+            {
+                db.Devices.Add(new DeviceRegistration
+                {
+                    Mac = mac,
+                    UserId = userId ?? string.Empty,
+                    ModelId = modelId ?? string.Empty,
+                    Company = company ?? string.Empty,
+                    MqttKey = mqttKey,
+                    RegisteredAt = now,
+                    LastRequestedAt = now,
+                });
+            }
+            else
+            {
+                device.MqttKey = mqttKey;
+                if (!string.IsNullOrEmpty(userId))
+                    device.UserId = userId;
+                if (!string.IsNullOrEmpty(modelId))
+                    device.ModelId = modelId;
+                if (!string.IsNullOrEmpty(company))
+                    device.Company = company;
+                device.LastRequestedAt = now;
+            }
+            await db.SaveChangesAsync(cancellationToken);
+        }
+
+        /// <summary>
         /// mac(대소문자 무관)으로 저장된 키를 찾는다. 없거나 mac 형식이 아니면 null.
         /// </summary>
         public async Task<string?> FindMqttKeyAsync(string mac, CancellationToken cancellationToken)
