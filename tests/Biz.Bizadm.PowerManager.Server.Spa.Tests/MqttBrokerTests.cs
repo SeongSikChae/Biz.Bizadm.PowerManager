@@ -42,6 +42,7 @@ public sealed class MqttBrokerTests
     private sealed class RecordingHandler : IDeviceMessageHandler
     {
         public ConcurrentQueue<string> Calls { get; } = new();
+        public ConcurrentQueue<MqttEnvelope> Notified { get; } = new();
         public TaskCompletionSource<MqttEnvelope> Registered { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
         public TaskCompletionSource<DeviceTopic> Offline { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
@@ -56,7 +57,12 @@ public sealed class MqttBrokerTests
 
         public Task TimeSyncAsync(DeviceTopic topic, MqttEnvelope envelope, CancellationToken ct) { Calls.Enqueue("tisyn"); return Task.CompletedTask; }
 
-        public Task NotifyAsync(DeviceTopic topic, MqttEnvelope envelope, CancellationToken ct) { Calls.Enqueue("notify"); return Task.CompletedTask; }
+        public Task NotifyAsync(DeviceTopic topic, MqttEnvelope envelope, CancellationToken ct)
+        {
+            Calls.Enqueue("notify");
+            Notified.Enqueue(envelope);
+            return Task.CompletedTask;
+        }
 
         public Task OfflineAsync(DeviceTopic topic, CancellationToken ct)
         {
@@ -150,7 +156,7 @@ public sealed class MqttBrokerTests
     public async Task UnknownOperation_LogsClientIdAndRawPayload()
     {
         const string clientId = "unknown-op-test";
-        const string payload = """{"sid":"0","msg":{"o":"n","e":[{"n":"/1/0/0","v":1}]}}""";
+        const string payload = """{"sid":"0","msg":{"o":"zz","e":[{"n":"/1/0/0","v":1}]}}""";
         RecordingHandler handler = new RecordingHandler();
         AppConfiguration configuration = TestApp.Configuration(tempRoot);
         await using (WebApplication app = await StartAsync(configuration, handler))
@@ -168,7 +174,53 @@ public sealed class MqttBrokerTests
 
         CollectionAssert.AreEqual(new[] { "rg" }, handler.Calls.ToArray());
         string log = ReadLogs();
-        StringAssert.Contains(log, $"Unknown device operation \"n\": \"{DeviceKey}\", topic=\"{UplinkTopic}\", clientId=\"{clientId}\", bytes={Encoding.UTF8.GetByteCount(payload)}, truncated=False, payload={payload}");
+        StringAssert.Contains(log, $"Unknown device operation \"zz\": \"{DeviceKey}\", topic=\"{UplinkTopic}\", clientId=\"{clientId}\", bytes={Encoding.UTF8.GetByteCount(payload)}, truncated=False, payload={payload}");
+    }
+
+    // C1·C2·C3: M130-W 실장비 형태(토픽 notify/json, 줄바꿈 JSON, 요소의 ti)의 "n"과 "notify"를 모두 NotifyAsync로 분배한다.
+    [TestMethod]
+    public async Task M130NotifyShortOperation_DispatchesToNotify()
+    {
+        const string clientId = "DAWONDNS-2ef4322ee918";
+        const string notifyTopic = "dwd.v1/DAWONDNS-M130-W-2ef4322ee918/iot-server/notify/json";
+        const string shortPayload = """
+            {
+              "sid":"1",
+              "msg":{"o":"n","e":[
+                {"n":"/100/0/1","sv":"228.30","ti":""},
+                {"n":"/100/0/0","sv":"true","ti":""},
+                {"n":"/99/0/5","sv":"3","ti":""}
+              ]}
+            }
+            """;
+        const string notifyPayload = """{"sid":"2","msg":{"o":"notify","e":[{"n":"/3/0/3","sv":"2.01.58"}]}}""";
+        RecordingHandler handler = new RecordingHandler();
+        AppConfiguration configuration = TestApp.Configuration(tempRoot);
+        await using (WebApplication app = await StartAsync(configuration, handler))
+        {
+            using IMqttClient client = new MqttClientFactory().CreateMqttClient();
+            await client.ConnectAsync(ClientOptions(configuration.MqttPort!.Value, clientId).Build());
+            await client.PublishStringAsync(notifyTopic, shortPayload, MqttQualityOfServiceLevel.AtLeastOnce);
+            await client.PublishStringAsync(notifyTopic, notifyPayload, MqttQualityOfServiceLevel.AtLeastOnce);
+            // 같은 클라이언트의 QoS 1 발행은 순서대로 처리되므로, 뒤의 rg 수신으로 앞 메시지 처리 완료를 확인한다.
+            await client.PublishStringAsync(UplinkTopic, RegisterJson, MqttQualityOfServiceLevel.AtLeastOnce);
+            await handler.Registered.Task.WaitAsync(Timeout);
+
+            await client.DisconnectAsync();
+            await app.StopAsync();
+        }
+
+        CollectionAssert.AreEqual(new[] { "notify", "notify", "rg" }, handler.Calls.ToArray());
+        MqttEnvelope[] notified = handler.Notified.ToArray();
+        CollectionAssert.AreEqual(new[] { "n", "notify" }, notified.Select(n => n.Msg.Operation).ToArray());
+        CollectionAssert.AreEqual(
+            new[] { ("/100/0/1", "228.30"), ("/100/0/0", "true"), ("/99/0/5", "3") },
+            notified[0].Msg.Elements.Select(e => (e.Path, e.StringValue)).ToArray());
+
+        string log = ReadLogs();
+        Assert.IsFalse(log.Contains("Unknown device operation", StringComparison.Ordinal), "n이 알 수 없는 오퍼레이션으로 남았다.");
+        Assert.IsFalse(log.Contains("not valid JSON", StringComparison.Ordinal), "M130-W 페이로드가 JSON 오류로 남았다.");
+        Assert.IsFalse(log.Contains("no msg.o or msg.e", StringComparison.Ordinal), "M130-W 페이로드가 해석 실패로 남았다.");
     }
 
     [TestMethod]

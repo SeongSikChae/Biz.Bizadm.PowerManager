@@ -133,7 +133,7 @@ namespace Biz.Bizadm.PowerManager.Server.Spa.Mqtt
                     MqttOperation.Register => handler.RegisterAsync(topic, envelope, e.CancellationToken),
                     MqttOperation.Deregister => handler.DeregisterAsync(topic, envelope, e.CancellationToken),
                     MqttOperation.TimeSync => handler.TimeSyncAsync(topic, envelope, e.CancellationToken),
-                    MqttOperation.Notify => handler.NotifyAsync(topic, envelope, e.CancellationToken),
+                    MqttOperation.Notify or MqttOperation.NotifyShort => handler.NotifyAsync(topic, envelope, e.CancellationToken),
                     _ => LogUnknown(topic, envelope, e),
                 };
                 await task;
