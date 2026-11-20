@@ -74,7 +74,7 @@ namespace Biz.Bizadm.PowerManager.FakeDevice.App.Mqtt
         }
 
         /// <summary>
-        /// MQTTnet이 3.1 CONNACK 반환 코드를 바꿔 준 값을 3.1 코드로 되돌린다(중계와 같은 표). 대응표에 없으면 3(서버 사용 불가).
+        /// MQTTnet이 3.1 CONNACK 반환 코드를 바꿔 준 값을 3.1 코드로 되돌린다. 대응표에 없으면 3(서버 사용 불가).
         /// </summary>
         public static int ToMqtt31ReturnCode(MqttClientConnectResultCode code) => code switch
         {

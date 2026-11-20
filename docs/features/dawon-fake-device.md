@@ -7,7 +7,7 @@
 - 다원 REST 서버(`dwapi.dawonai.com:18443`)에 등록하고, 다원 브로커(`dwmqtt.dawonai.com:8883`)에 장치와 같은 방식(MQTT 3.1, TLS 1.2)으로 접속한다.
 - 정해진 장치 메시지와 콘솔에서 입력한 메시지를 보내고, 받은 메시지에는 응답하지 않는다.
 - 받은 메시지에 FOTA URL이 있으면 장치처럼 URL에 반대편 슬롯 접미사(`_1`/`_2`)를 붙여 이미지를 받아 파일로 저장한다. 받은 파일은 실행하지 않는다.
-- 보내고 받은 원문은 dawon-relay와 같은 형식의 JSONL로 기록한다.
+- 보내고 받은 원문은 JSONL로 기록한다(R9).
 
 실행: `Biz.Bizadm.PowerManager.FakeDevice.App --config <설정 YAML> --log <로그 폴더>`. 종료 코드는 0(정상 종료), 1(명령줄 인자 오류), 2(설정 오류), 3(실행 중 실패)이다. 설계(콘솔 앱 템플릿과 다른 점, FOTA 헤더 근거, 시험 구조)는 `docs/specs/dawon-fake-device/plan.md`에, FOTA 요청 경로 설계는 `docs/specs/dawon-fake-device-fota-path/plan.md`에 있다.
 
@@ -89,8 +89,12 @@
 ### 기록과 종료
 
 - R9. 보내고 받은 모든 주고받음을 기록 폴더의 UTC 날짜별 파일 `dawon-fake-device-yyyyMMdd.jsonl`에 한 줄에 JSON 하나로 덧붙인다.
-  - 형식은 dawon-relay R9·R10과 같은 형식을 쓴다.
+  - 형식
     - 공통 필드: `ts`·`channel`·`direction`·`kind`
+    - `channel`과 채널별 `kind` 값
+      - `rest`: `request`·`response`·`error`·`verify`
+      - `mqtt`: `connect`·`connack`·`subscribe`·`suback`·`publish`·`disconnect`·`error`
+      - `fota`: `candidate`·`request`·`response`·`error`
     - `device-to-dawon`은 가짜 장비가 보낸 것, `dawon-to-device`는 다원에서 받은 것이다.
     - 본문·페이로드는 자르지 않는다. 올바른 UTF-8이 아니면 Base64로 기록하고 인코딩을 표시한다.
   - REST는 요청 항목과 응답 항목으로 남긴다(메서드·경로·본문, 응답은 상태 코드까지).
@@ -146,3 +150,4 @@
 |---|---|---|---|
 | 2026-11-20 | dawon-fake-device | R1~R16 처음 작성(새 기능) | docs/specs/dawon-fake-device/ |
 | 2026-11-20 | dawon-fake-device-fota-path | R1(실행 슬롯 설정)·R9(본문 항목 삭제)·R13(FOTA 결과 항목)·R14(이미지 요청 하나)·R15(`fota` 한 요청, `get` 그대로)·R16(두 요청 규칙 삭제) 바꿈, 개요·범위 밖 바꿈 | docs/specs/dawon-fake-device-fota-path/ |
+| 2026-11-20 | dawon-relay-removal | R9 바꿈(형식 값을 직접 적음, 동작은 그대로), 개요 바꿈(dawon-relay 참조 삭제) | docs/specs/dawon-relay-removal/ |

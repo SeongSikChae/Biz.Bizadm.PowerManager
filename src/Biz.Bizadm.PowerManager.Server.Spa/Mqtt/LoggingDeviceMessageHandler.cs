@@ -1,5 +1,4 @@
 using Biz.Bizadm.PowerManager.Core.Mqtt;
-using Biz.Bizadm.PowerManager.Server.Spa.Relay;
 using MQTTnet;
 using MQTTnet.Protocol;
 using MQTTnet.Server;
@@ -11,14 +10,14 @@ using System.Text.Json;
 namespace Biz.Bizadm.PowerManager.Server.Spa.Mqtt
 {
     /// <summary>
-    /// 기본 <see cref="IDeviceMessageHandler"/>. 수신 내용을 로그로 남기고, 중계 모드가 꺼져 있으면 시간 동기 요청(<c>tisyn</c>)에
-    /// 그 장치의 서버 → 장치 토픽으로 <c>w</c> <c>/99/0/1</c>(UTC Unix epoch 초)을 보낸다. 중계 모드에서는 다원의 응답이 주입되므로 응답하지 않는다.
+    /// 기본 <see cref="IDeviceMessageHandler"/>. 수신 내용을 로그로 남기고, 시간 동기 요청(<c>tisyn</c>)에는
+    /// 그 장치의 서버 → 장치 토픽으로 <c>w</c> <c>/99/0/1</c>(UTC Unix epoch 초)을 보낸다.
     /// </summary>
     public sealed class LoggingDeviceMessageHandler(ILogger<LoggingDeviceMessageHandler> logger, MqttServerAccessor accessor,
-        TimeProvider timeProvider, DawonMqttRelay? relay = null) : IDeviceMessageHandler
+        TimeProvider timeProvider) : IDeviceMessageHandler
     {
         /// <summary>
-        /// 서버가 주입하는 메시지의 보낸 쪽 ClientId. 중계 모드의 주입 접두(<c>dawon-relay/</c>)와 겹치지 않는다.
+        /// 서버가 주입하는 메시지의 보낸 쪽 ClientId.
         /// </summary>
         public const string SenderClientId = "power-manager";
 
@@ -34,8 +33,7 @@ namespace Biz.Bizadm.PowerManager.Server.Spa.Mqtt
         public async Task TimeSyncAsync(DeviceTopic topic, MqttEnvelope envelope, CancellationToken ct)
         {
             await Log(topic, envelope);
-            if (relay is null)
-                await RespondTimeSyncAsync(topic, envelope, ct);
+            await RespondTimeSyncAsync(topic, envelope, ct);
         }
 
         public Task NotifyAsync(DeviceTopic topic, MqttEnvelope envelope, CancellationToken ct) => Log(topic, envelope);

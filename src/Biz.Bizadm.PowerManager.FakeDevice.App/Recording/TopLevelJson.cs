@@ -5,7 +5,7 @@ namespace Biz.Bizadm.PowerManager.FakeDevice.App.Recording
 {
     /// <summary>
     /// 원문 JSON 바이트에서 최상위 객체 속성 값의 바이트 범위를 찾아 바꾼다. 나머지 바이트(공백·키 순서·이스케이프 형태)는 그대로 둔다.
-    /// Server.Spa 중계의 같은 이름 클래스 가운데 가림에 필요한 부분만 둔다(D018).
+    /// 기록하는 REST 응답 본문의 비밀 값(<c>mqtt_key</c>·<c>verify</c>)을 가리는 데 쓴다.
     /// </summary>
     internal static class TopLevelJson
     {

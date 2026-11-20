@@ -2,7 +2,6 @@ using Biz.Bizadm.PowerManager.Core.Devices;
 using Biz.Bizadm.PowerManager.Core.Mqtt;
 using Biz.Bizadm.PowerManager.Server.Core;
 using Biz.Bizadm.PowerManager.Server.Spa.Devices;
-using Biz.Bizadm.PowerManager.Server.Spa.Relay;
 using MQTTnet.Server;
 using System.Buffers;
 using System.Security.Authentication;
@@ -18,8 +17,7 @@ namespace Biz.Bizadm.PowerManager.Server.Spa.Mqtt
     /// 접속 인증은 하지 않으며, 접속마다 자격 증명이 등록 키와 맞는지 관찰 로그만 남긴다.
     /// </summary>
     public sealed class MqttBrokerHostedService(AppConfiguration configuration, IDeviceMessageHandler handler,
-        DeviceRegistrationService registrations, MqttServerAccessor accessor, ILogger<MqttBrokerHostedService> logger,
-        DawonMqttRelay? relay = null)
+        DeviceRegistrationService registrations, MqttServerAccessor accessor, ILogger<MqttBrokerHostedService> logger)
         : IHostedService, IAsyncDisposable
     {
         /// <summary>
@@ -51,16 +49,6 @@ namespace Biz.Bizadm.PowerManager.Server.Spa.Mqtt
             server = factory.CreateMqttServer(optionsBuilder.Build());
             server.InterceptingPublishAsync += OnPublishAsync;
             server.ValidatingConnectionAsync += OnValidatingConnectionAsync;
-            if (relay is not null)
-            {
-                // 중계 모드: 다원 접속·구독·발행·종료를 맞춘다. 접속 검증은 OnValidatingConnectionAsync 안에서 R9 로그 뒤에 부른다.
-                relay.Attach(server);
-                server.InterceptingInboundPacketAsync += relay.OnInboundPacketAsync;
-                server.InterceptingSubscriptionAsync += relay.OnSubscriptionAsync;
-                server.InterceptingClientEnqueueAsync += relay.OnClientEnqueueAsync;
-                server.InterceptingOutboundPacketAsync += relay.OnOutboundPacketAsync;
-                server.ClientDisconnectedAsync += relay.OnClientDisconnectedAsync;
-            }
             await server.StartAsync();
             // 핸들러가 서버 → 장치 메시지(tisyn 응답)를 주입할 수 있게 시작한 브로커를 넘긴다.
             accessor.Server = server;
@@ -82,15 +70,6 @@ namespace Biz.Bizadm.PowerManager.Server.Spa.Mqtt
                 accessor.Server = null;
                 current.InterceptingPublishAsync -= OnPublishAsync;
                 current.ValidatingConnectionAsync -= OnValidatingConnectionAsync;
-                if (relay is not null)
-                {
-                    current.InterceptingInboundPacketAsync -= relay.OnInboundPacketAsync;
-                    current.InterceptingSubscriptionAsync -= relay.OnSubscriptionAsync;
-                    current.InterceptingClientEnqueueAsync -= relay.OnClientEnqueueAsync;
-                    current.InterceptingOutboundPacketAsync -= relay.OnOutboundPacketAsync;
-                    current.ClientDisconnectedAsync -= relay.OnClientDisconnectedAsync;
-                    await relay.DisposeAsync();
-                }
                 await current.StopAsync();
                 current.Dispose();
             }
@@ -125,9 +104,6 @@ namespace Biz.Bizadm.PowerManager.Server.Spa.Mqtt
 
             logger.LogInformation("MQTT client connecting: clientId={ClientId}, userName={UserName}, hasPassword={HasPassword}, passwordCheck={PasswordCheck}",
                 e.ClientId, e.UserName, hasPassword, check);
-
-            if (relay is not null)
-                await relay.OnValidatingConnectionAsync(e);
         }
 
         private async Task OnPublishAsync(InterceptingPublishEventArgs e)
@@ -142,10 +118,6 @@ namespace Biz.Bizadm.PowerManager.Server.Spa.Mqtt
                     topicName, e.ClientId, bytes, truncated, text);
                 return;
             }
-
-            // 중계 모드에서 다원 → 클라이언트로 주입한 메시지는 장치 → 서버 메시지가 아니므로 핸들러에 분배하지 않는다.
-            if (DawonMqttRelay.IsInjected(e.ClientId))
-                return;
 
             try
             {

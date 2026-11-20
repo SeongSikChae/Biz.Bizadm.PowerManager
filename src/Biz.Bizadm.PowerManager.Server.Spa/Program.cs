@@ -3,9 +3,6 @@ using Biz.Bizadm.PowerManager.Server.Core;
 using Biz.Bizadm.PowerManager.Server.Spa.Data;
 using Biz.Bizadm.PowerManager.Server.Spa.Devices;
 using Biz.Bizadm.PowerManager.Server.Spa.Mqtt;
-using Biz.Bizadm.PowerManager.Server.Spa.Relay;
-using System.Net.Security;
-using System.Security.Authentication;
 using CommandLine;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.FileProviders;
@@ -128,8 +125,6 @@ namespace Biz.Bizadm.PowerManager.Server.Spa
             builder.Services.AddSingleton<IDeviceMessageHandler, LoggingDeviceMessageHandler>();
             builder.Services.AddSingleton<IDeviceCommandPublisher, MqttDeviceCommandPublisher>();
             builder.Services.AddHostedService<MqttBrokerHostedService>();
-            if (c.DawonRelay?.IsEnabled == true)
-                AddDawonRelay(builder.Services, c);
 
             configureBuilder?.Invoke(builder);
             WebApplication app = builder.Build();
@@ -163,32 +158,6 @@ namespace Biz.Bizadm.PowerManager.Server.Spa
                 app.MapFallback(context => ServeIndexHtmlAsync(context, app.Environment.WebRootFileProvider));
 
             return app;
-        }
-
-        /// <summary>
-        /// 다원 서버 중계 모드 서비스. 켜져 있을 때만 등록한다.
-        /// </summary>
-        private static void AddDawonRelay(IServiceCollection services, AppConfiguration c)
-        {
-            DawonRelayConfiguration relay = c.DawonRelay!;
-            string recordDirectory = Path.Combine(c.ContentRootPath, relay.RecordDirectory);
-            services.AddSingleton(sp => new DawonRelayRecorder(recordDirectory, sp.GetRequiredService<TimeProvider>(),
-                sp.GetRequiredService<ILogger<DawonRelayRecorder>>()));
-            services.AddHttpClient(DawonRestRelay.HttpClientName, client =>
-                {
-                    client.BaseAddress = new Uri($"https://{relay.ApiServerHost}:{relay.ApiServerPort}");
-                    client.Timeout = Timeout.InfiniteTimeSpan; // 시간 제한은 DawonRestRelay가 요청마다 건다.
-                })
-                .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler
-                {
-                    SslOptions = new SslClientAuthenticationOptions
-                    {
-                        EnabledSslProtocols = SslProtocols.Tls12,
-                        RemoteCertificateValidationCallback = relay.SkipCertificateValidation == true ? (_, _, _, _) => true : null,
-                    },
-                });
-            services.AddSingleton<DawonRestRelay>();
-            services.AddSingleton<DawonMqttRelay>();
         }
 
         /// <summary>
