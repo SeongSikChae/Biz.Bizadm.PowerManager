@@ -34,6 +34,7 @@ public sealed class AppConfigurationTests
         Assert.AreEqual("0", config.Device.Lati);
         Assert.AreEqual("0", config.Device.Long);
         Assert.AreEqual("1.01.36", config.Device.FirmwareVersion);
+        Assert.AreEqual(2, config.Device.RunningSlot);
         Assert.AreEqual("", config.Register.MqttKey);
         Assert.AreEqual("dwmqtt.dawonai.com", config.EffectiveVerifyServerAddr());
         Assert.AreEqual(60, config.Mqtt.KeepAliveSeconds);
@@ -71,6 +72,21 @@ public sealed class AppConfigurationTests
         Assert.AreEqual(TimeSpan.FromSeconds(10), options.MqttTimeout);
         Assert.AreEqual(TimeSpan.FromSeconds(60), options.FotaTimeout);
         Assert.AreEqual(4 * 1024 * 1024, options.FotaMaxBytes);
+        Assert.AreEqual(2, options.RunningSlot);
+        Assert.AreEqual("_1", options.FotaSuffix);
+    }
+
+    [TestMethod]
+    public void Options_RunningSlot1_UsesSlot2Suffix()
+    {
+        AppConfiguration config = Valid();
+        config.Device.RunningSlot = 1;
+        ValidateAll(config);
+
+        FakeDeviceOptions options = FakeDeviceOptions.Create(config, ConfigSecrets.Empty, "C:\\unused");
+
+        Assert.AreEqual(1, options.RunningSlot);
+        Assert.AreEqual("_2", options.FotaSuffix);
     }
 
     [TestMethod]
@@ -109,6 +125,8 @@ public sealed class AppConfigurationTests
     {
         yield return Case("mac short", c => c.Device.Mac = "a1b2c3d4e5");
         yield return Case("mac not hex", c => c.Device.Mac = "a1b2c3d4e5g6");
+        yield return Case("running slot 0", c => c.Device.RunningSlot = 0);
+        yield return Case("running slot 3", c => c.Device.RunningSlot = 3);
         yield return Case("api port 0", c => c.Dawon.ApiServerPort = 0);
         yield return Case("mqtt port 65536", c => c.Dawon.MqttServerPort = 65536);
         yield return Case("qos 3", c => c.Publish.QoS = 3);

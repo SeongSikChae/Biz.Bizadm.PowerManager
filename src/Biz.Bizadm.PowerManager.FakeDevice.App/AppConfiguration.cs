@@ -63,6 +63,8 @@ namespace Biz.Bizadm.PowerManager.FakeDevice.App
             Device.Lati ??= "";
             Device.Long ??= "";
             Device.FirmwareVersion ??= "";
+            if (Device.RunningSlot is not (1 or 2))
+                throw new ArgumentException($"Device.RunningSlot must be 1 or 2: {Device.RunningSlot}");
 
             Register ??= new RegisterSection();
             ConfigurationValidator.Validate(Register);
@@ -193,6 +195,10 @@ namespace Biz.Bizadm.PowerManager.FakeDevice.App
 
         [Property(PropertyType.STRING, required: false)]
         public string FirmwareVersion { get; set; } = "1.01.36";
+
+        /// <summary>흉내 낼 실행 슬롯(1=user1, 2=user2). FOTA는 반대편 슬롯 이미지를 받는다(추정 규칙, spec C2).</summary>
+        [Property(PropertyType.INT, required: false)]
+        public int RunningSlot { get; set; } = 2;
     }
 
     internal sealed class RegisterSection

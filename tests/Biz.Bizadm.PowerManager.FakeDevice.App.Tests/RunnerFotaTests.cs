@@ -26,8 +26,7 @@ public sealed class RunnerFotaTests
         recordDirectory = TestHarness.NewTempDirectory();
         http.Responder = r => r.Path switch
         {
-            "/fw/b540/version" => new FakeDawonHttp.Reply(200, "text/plain", Encoding.UTF8.GetBytes("1.01.40")),
-            "/fw/b540" => new FakeDawonHttp.Reply(200, "application/octet-stream", Image),
+            "/fw/b540_1" or "/fw/b540_2" or "/fw/b540" or "/fw/b540/_1" => new FakeDawonHttp.Reply(200, "application/octet-stream", Image),
             _ when r.Path.StartsWith("/api/", StringComparison.Ordinal) => new FakeDawonHttp.Reply(200, "application/json", "{}"u8.ToArray()),
             _ => new FakeDawonHttp.Reply(404, null, []),
         };
@@ -60,15 +59,16 @@ public sealed class RunnerFotaTests
     private static async Task ResponsesAsync(RunnerSession session, int count)
         => await TestHarness.WaitUntilAsync(() => session.Records().Of("fota", "response").Count() + session.Records().Of("fota", "error").Count() >= count, $"{count} FOTA results");
 
-    // ---------- C14 ----------
+    // ---------- C1 ----------
 
     [TestMethod]
-    public async Task Auto_CandidateRecordedAndTwoRequestsWithFixedHeaders()
+    public async Task Auto_CandidateRecordedAndOneSuffixedRequestWithFixedHeaders()
     {
         await using RunnerSession session = await StartAsync();
 
         await broker.PublishAsync(Down + "/w/json", WriteMessage(Url));
-        await ResponsesAsync(session, 2);
+        await ResponsesAsync(session, 1);
+        await Task.Delay(TimeSpan.FromSeconds(1));
 
         JsonElement candidate = session.Records().Of("fota", "candidate").Single();
         Assert.AreEqual(Down + "/w/json", candidate.GetProperty("topic").GetString());
@@ -76,7 +76,10 @@ public sealed class RunnerFotaTests
         StringAssert.Contains(session.Console, "FOTA candidate: " + Url);
 
         List<FakeDawonHttp.Received> requests = FotaRequests();
-        CollectionAssert.AreEqual(new[] { "/fw/b540/version", "/fw/b540" }, requests.Select(r => r.Path).ToArray());
+        CollectionAssert.AreEqual(new[] { "/fw/b540_1" }, requests.Select(r => r.Path).ToArray());
+        JsonElement requestRecord = session.Records().Of("fota", "request").Single();
+        Assert.AreEqual("image", requestRecord.GetProperty("purpose").GetString());
+        Assert.AreEqual(Url + "_1", requestRecord.GetProperty("url").GetString());
         foreach (FakeDawonHttp.Received request in requests)
         {
             Assert.AreEqual("GET", request.Method);
@@ -95,9 +98,9 @@ public sealed class RunnerFotaTests
         await using RunnerSession session = await StartAsync();
 
         await broker.PublishAsync(Down + "/w/json", $"{{\"msg\":{{\"e\":[{{\"v\":[1,{{\"deep\":\"{Url}/\"}}]}}]}}}}");
-        await ResponsesAsync(session, 2);
+        await ResponsesAsync(session, 1);
 
-        CollectionAssert.AreEqual(new[] { "/fw/b540/version", "/fw/b540/" }, FotaRequests().Select(r => r.Path).ToArray());
+        CollectionAssert.AreEqual(new[] { "/fw/b540/_1" }, FotaRequests().Select(r => r.Path).ToArray());
     }
 
     [TestMethod]
@@ -106,12 +109,26 @@ public sealed class RunnerFotaTests
         await using RunnerSession session = await StartAsync();
 
         await broker.PublishAsync(Down + "/w/json", WriteMessage(Url));
-        await ResponsesAsync(session, 2);
+        await ResponsesAsync(session, 1);
         await broker.PublishAsync(Down + "/w/json", WriteMessage(Url));
         await TestHarness.WaitUntilAsync(() => session.Records().Of("fota", "candidate").Count() == 2, "second candidate");
         await Task.Delay(TimeSpan.FromSeconds(1));
 
-        Assert.AreEqual(2, FotaRequests().Count);
+        Assert.AreEqual(1, FotaRequests().Count);
+    }
+
+    // ---------- C2 ----------
+
+    [TestMethod]
+    public async Task Auto_RunningSlot1_RequestsSlot2Image()
+    {
+        await using RunnerSession session = await StartAsync(Options() with { RunningSlot = 1 });
+
+        await broker.PublishAsync(Down + "/w/json", WriteMessage(Url));
+        await ResponsesAsync(session, 1);
+
+        CollectionAssert.AreEqual(new[] { "/fw/b540_2" }, FotaRequests().Select(r => r.Path).ToArray());
+        Assert.AreEqual(Url + "_2", session.Records().Of("fota", "response").Single().GetProperty("url").GetString());
     }
 
     [TestMethod]
@@ -137,13 +154,15 @@ public sealed class RunnerFotaTests
         Assert.AreEqual(scenario == "auto-off" ? 1 : 0, session.Records().Of("fota", "candidate").Count());
     }
 
-    // ---------- C15 ----------
+    // ---------- C3·C4 ----------
 
     [TestMethod]
-    public async Task Command_FotaTwoRequests_GetOneRequest_Repeats()
+    public async Task Command_FotaOneSuffixedRequest_GetAsIs_Repeats()
     {
         await using RunnerSession session = await StartAsync();
 
+        session.Input.Send("fota " + Url);
+        await ResponsesAsync(session, 1);
         session.Input.Send("fota " + Url);
         await ResponsesAsync(session, 2);
         session.Input.Send("get " + Url);
@@ -151,12 +170,12 @@ public sealed class RunnerFotaTests
         session.Input.Send("get " + Url);
         await ResponsesAsync(session, 4);
 
-        CollectionAssert.AreEqual(new[] { "/fw/b540/version", "/fw/b540", "/fw/b540", "/fw/b540" }, FotaRequests().Select(r => r.Path).ToArray());
-        CollectionAssert.AreEqual(new[] { "version", "url", "get", "get" },
+        CollectionAssert.AreEqual(new[] { "/fw/b540_1", "/fw/b540_1", "/fw/b540", "/fw/b540" }, FotaRequests().Select(r => r.Path).ToArray());
+        CollectionAssert.AreEqual(new[] { "image", "image", "get", "get" },
             session.Records().Of("fota", "request").Select(r => r.GetProperty("purpose").GetString()).ToArray());
     }
 
-    // ---------- C16·C9 ----------
+    // ---------- C5 ----------
 
     [TestMethod]
     public async Task Ok_SavesFile_RecordsHashSizeAndFields()
@@ -164,23 +183,18 @@ public sealed class RunnerFotaTests
         await using RunnerSession session = await StartAsync();
 
         session.Input.Send("fota " + Url);
-        await ResponsesAsync(session, 2);
+        await ResponsesAsync(session, 1);
 
-        JsonElement[] responses = session.Records().Of("fota", "response").ToArray();
-        JsonElement version = responses.Single(r => r.GetProperty("url").GetString() == Url + "/version");
-        Assert.AreEqual(200, version.GetProperty("status").GetInt32());
-        Assert.AreEqual("1.01.40", version.GetProperty("body").GetString());
-        Assert.AreEqual("text/plain", version.GetProperty("contentType").GetString());
-
-        JsonElement image = responses.Single(r => r.GetProperty("url").GetString() == Url);
+        JsonElement image = session.Records().Of("fota", "response").Single();
+        Assert.AreEqual(Url + "_1", image.GetProperty("url").GetString());
         Assert.AreEqual(200, image.GetProperty("status").GetInt32());
         Assert.AreEqual("application/octet-stream", image.GetProperty("contentType").GetString());
         Assert.AreEqual(Image.Length, image.GetProperty("contentLength").GetInt64());
         Assert.AreEqual(Image.Length, image.GetProperty("bytes").GetInt64());
         Assert.AreEqual(Convert.ToHexStringLower(SHA256.HashData(Image)), image.GetProperty("sha256").GetString());
-        Assert.IsFalse(image.TryGetProperty("body", out _), "no body for non-version");
+        Assert.IsFalse(image.TryGetProperty("body", out _), "no body field");
         string file = image.GetProperty("file").GetString()!;
-        StringAssert.Matches(file, new System.Text.RegularExpressions.Regex(@"^fota/\d{8}T\d{9}Z-\d{4}-url\.bin$"));
+        StringAssert.Matches(file, new System.Text.RegularExpressions.Regex(@"^fota/\d{8}T\d{9}Z-\d{4}-image\.bin$"));
         CollectionAssert.AreEqual(Image, File.ReadAllBytes(Path.Combine(recordDirectory, file)));
         Assert.AreEqual(0, Directory.GetFiles(Path.Combine(recordDirectory, "fota"), "*.part").Length);
         StringAssert.Contains(session.Console, "sha256 " + image.GetProperty("sha256").GetString());
@@ -199,23 +213,23 @@ public sealed class RunnerFotaTests
     }
 
     [TestMethod]
-    public async Task Version404_StillRequestsUrl()
+    public async Task Image404_RecordsStatusOnlyWithoutFile()
     {
-        http.Responder = r => r.Path == "/fw/b540"
-            ? new FakeDawonHttp.Reply(200, "application/octet-stream", Image)
-            : new FakeDawonHttp.Reply(404, "text/plain", Encoding.UTF8.GetBytes("missing"));
+        http.Responder = _ => new FakeDawonHttp.Reply(404, "text/plain", Encoding.UTF8.GetBytes("missing"));
         await using RunnerSession session = await StartAsync();
 
         session.Input.Send("fota " + Url);
-        await ResponsesAsync(session, 2);
+        await ResponsesAsync(session, 1);
 
-        JsonElement[] responses = session.Records().Of("fota", "response").ToArray();
-        JsonElement version = responses.Single(r => r.GetProperty("url").GetString() == Url + "/version");
-        Assert.AreEqual(404, version.GetProperty("status").GetInt32());
-        Assert.AreEqual("missing", version.GetProperty("body").GetString());
-        Assert.IsFalse(version.TryGetProperty("file", out _));
-        Assert.AreEqual(200, responses.Single(r => r.GetProperty("url").GetString() == Url).GetProperty("status").GetInt32());
-        Assert.AreEqual(1, Directory.GetFiles(Path.Combine(recordDirectory, "fota")).Length);
+        JsonElement response = session.Records().Of("fota", "response").Single();
+        Assert.AreEqual(Url + "_1", response.GetProperty("url").GetString());
+        Assert.AreEqual(404, response.GetProperty("status").GetInt32());
+        Assert.IsFalse(response.TryGetProperty("body", out _));
+        Assert.IsFalse(response.TryGetProperty("file", out _));
+        Assert.IsFalse(response.TryGetProperty("sha256", out _));
+        string fota = Path.Combine(recordDirectory, "fota");
+        Assert.AreEqual(0, Directory.Exists(fota) ? Directory.GetFiles(fota).Length : 0);
+        StringAssert.Contains(session.Console, "status 404");
     }
 
     [TestMethod]

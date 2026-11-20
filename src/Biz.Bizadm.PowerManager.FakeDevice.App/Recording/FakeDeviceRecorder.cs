@@ -15,8 +15,7 @@ namespace Biz.Bizadm.PowerManager.FakeDevice.App.Recording
         string? Location,
         long? Bytes,
         string? Sha256,
-        string? File,
-        byte[]? Body);
+        string? File);
 
     /// <summary>
     /// 보내고 받은 주고받음을 기록 폴더의 UTC 날짜별 JSONL 파일(<c>dawon-fake-device-yyyyMMdd.jsonl</c>)에 한 줄씩 덧붙인다.
@@ -230,8 +229,8 @@ namespace Biz.Bizadm.PowerManager.FakeDevice.App.Recording
             });
 
         /// <param name="id">요청 순번.</param>
-        /// <param name="purpose"><c>version</c>·<c>url</c>·<c>get</c></param>
-        /// <param name="url">요청 URL.</param>
+        /// <param name="purpose"><c>image</c>(받은 URL + 슬롯 접미사)·<c>get</c>(입력 URL 그대로)</param>
+        /// <param name="url">실제로 보낸 요청 URL.</param>
         public Task FotaRequestAsync(int id, string purpose, string url)
             => WriteAsync("fota", DeviceToDawon, "request", w =>
             {
@@ -240,7 +239,7 @@ namespace Biz.Bizadm.PowerManager.FakeDevice.App.Recording
                 w.WriteString("url", url);
             });
 
-        /// <summary>응답 항목. <c>Body</c>는 버전 요청일 때만 쓴다.</summary>
+        /// <summary>응답 항목. 응답 본문은 기록에 넣지 않고 200일 때 파일로만 둔다.</summary>
         public Task FotaResponseAsync(FotaResponseRecord response)
             => WriteAsync("fota", DawonToDevice, "response", w =>
             {
@@ -260,8 +259,6 @@ namespace Biz.Bizadm.PowerManager.FakeDevice.App.Recording
                     w.WriteString("sha256", response.Sha256);
                 if (response.File is not null)
                     w.WriteString("file", response.File);
-                if (response.Body is not null)
-                    WriteBytes(w, "body", "bodyEncoding", response.Body);
             });
 
         /// <param name="id">요청 순번.</param>

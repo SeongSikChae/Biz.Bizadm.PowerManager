@@ -24,10 +24,10 @@ public sealed class FotaDownloaderTests
     }
 
     [TestMethod]
-    [DataRow("http://fw.example/b540", "http://fw.example/b540/version")]
-    [DataRow("http://fw.example/b540/", "http://fw.example/b540/version")]
-    [DataRow("http://fw.example/b540//", "http://fw.example/b540/version")]
-    [DataRow("https://fw.example:8443/", "https://fw.example:8443/version")]
-    public void VersionUrl_NormalizesTrailingSlash(string url, string expected)
-        => Assert.AreEqual(expected, FotaDownloader.VersionUrl(url));
+    [DataRow("http://fw.example/b540/1.01.34", "_1", "http://fw.example/b540/1.01.34_1")]
+    [DataRow("http://fw.example/b540/1.01.34", "_2", "http://fw.example/b540/1.01.34_2")]
+    [DataRow("http://fw.example/b540/", "_1", "http://fw.example/b540/_1")]
+    [DataRow("https://fw.example:8443/b540", "_2", "https://fw.example:8443/b540_2")]
+    public void ImageUrl_AppendsSuffixAsIs(string url, string suffix, string expected)
+        => Assert.AreEqual(expected, FotaDownloader.ImageUrl(url, suffix));
 }

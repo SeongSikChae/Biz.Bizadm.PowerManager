@@ -28,6 +28,12 @@ namespace Biz.Bizadm.PowerManager.FakeDevice.App
         public string Long { get; init; } = "0";
         public string FirmwareVersion { get; init; } = "1.01.36";
 
+        /// <summary>흉내 낼 실행 슬롯(1 또는 2).</summary>
+        public int RunningSlot { get; init; } = 2;
+
+        /// <summary>FOTA 요청 경로 끝에 붙일 반대편 슬롯 접미사. 실행 슬롯 2면 <c>_1</c>, 1이면 <c>_2</c>.</summary>
+        public string FotaSuffix => RunningSlot == 2 ? "_1" : "_2";
+
         /// <summary>설정의 mqtt_key(복호화 값). 없으면 등록으로 받는다.</summary>
         public string? MqttKey { get; init; }
         public required string VerifyServerAddr { get; init; }
@@ -88,6 +94,7 @@ namespace Biz.Bizadm.PowerManager.FakeDevice.App
                 Lati = config.Device.Lati,
                 Long = config.Device.Long,
                 FirmwareVersion = config.Device.FirmwareVersion,
+                RunningSlot = config.Device.RunningSlot,
                 MqttKey = secrets.MqttKey,
                 VerifyServerAddr = config.EffectiveVerifyServerAddr(),
                 ClientId = string.IsNullOrEmpty(config.Mqtt.ClientId) ? $"{company}-{mac}" : config.Mqtt.ClientId,

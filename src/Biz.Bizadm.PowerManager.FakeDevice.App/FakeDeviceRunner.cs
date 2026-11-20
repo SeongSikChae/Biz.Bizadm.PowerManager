@@ -231,7 +231,7 @@ namespace Biz.Bizadm.PowerManager.FakeDevice.App
                         await PublishAsync(Up(command.Target!), Encoding.UTF8.GetBytes(command.Payload!), runningToken);
                         break;
                     case ConsoleCommandKind.Fota:
-                        StartDownload(token => fota!.DownloadPairAsync(command.Target!, token));
+                        StartDownload(token => fota!.DownloadImageAsync(command.Target!, token));
                         break;
                     case ConsoleCommandKind.Get:
                         StartDownload(token => fota!.DownloadAsync(command.Target!, FotaDownloader.PurposeGet, token));
@@ -256,7 +256,7 @@ namespace Biz.Bizadm.PowerManager.FakeDevice.App
                 await recorder.FotaCandidateAsync(message.Topic, url);
                 await console.WriteLineAsync($"FOTA candidate: {url}");
                 if (options.FotaAutoDownload && autoDownloaded.TryAdd(url, 0))
-                    StartDownload(token => fota!.DownloadPairAsync(url, token));
+                    StartDownload(token => fota!.DownloadImageAsync(url, token));
             }
         }
 

@@ -27,6 +27,7 @@ Device:
   Lati: "0"
   Long: "0"
   FirmwareVersion: 1.01.36
+  RunningSlot: 2                     # 흉내 낼 실행 슬롯(1|2). FOTA는 반대편 이미지를 받는다(2 → _1, 1 → _2)
 
 Register:
   MqttKey: ""                        # 있으면 등록을 건너뛴다

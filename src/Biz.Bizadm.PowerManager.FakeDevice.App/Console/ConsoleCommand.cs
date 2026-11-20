@@ -8,7 +8,7 @@ namespace Biz.Bizadm.PowerManager.FakeDevice.App.Console
         /// <summary><c>up &lt;접미&gt; &lt;페이로드&gt;</c></summary>
         PublishSuffix,
 
-        /// <summary><c>fota &lt;URL&gt;</c>: 버전·URL 두 요청</summary>
+        /// <summary><c>fota &lt;URL&gt;</c>: 장치와 같은 이미지 요청 하나(URL + 반대편 슬롯 접미사)</summary>
         Fota,
 
         /// <summary><c>get &lt;URL&gt;</c>: URL 하나만 GET</summary>
@@ -33,7 +33,7 @@ namespace Biz.Bizadm.PowerManager.FakeDevice.App.Console
             "Commands:\n" +
             "  pub <topic> <payload>   publish to the topic as is\n" +
             "  up <suffix> <payload>   publish to {prefix}.v1/{device key}/iot-server/{suffix}\n" +
-            "  fota <url>              GET {url}/version and GET {url}\n" +
+            "  fota <url>              GET {url}{slot suffix} (RunningSlot 2 -> _1, 1 -> _2)\n" +
             "  get <url>               GET {url}\n" +
             "  quit | exit             disconnect and exit\n" +
             "  help                    show this help";

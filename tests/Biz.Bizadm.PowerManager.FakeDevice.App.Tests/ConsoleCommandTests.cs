@@ -28,6 +28,16 @@ public sealed class ConsoleCommandTests
         => Assert.AreEqual(new ConsoleCommand(Enum.Parse<ConsoleCommandKind>(kind), url), ConsoleCommand.Parse(line));
 
     [TestMethod]
+    public void UsageText_FotaIsSingleSuffixedRequest()
+    {
+        string fotaLine = ConsoleCommand.UsageText.Split('\n').Single(l => l.TrimStart().StartsWith("fota ", StringComparison.Ordinal));
+
+        StringAssert.Contains(fotaLine, "GET {url}{slot suffix}");
+        StringAssert.Contains(fotaLine, "RunningSlot 2 -> _1, 1 -> _2");
+        Assert.IsFalse(ConsoleCommand.UsageText.Contains("/version", StringComparison.Ordinal));
+    }
+
+    [TestMethod]
     [DataRow("quit", "Quit")]
     [DataRow(" EXIT ", "Quit")]
     [DataRow("help", "Help")]

@@ -6,13 +6,12 @@ using System.Security.Cryptography;
 namespace Biz.Bizadm.PowerManager.FakeDevice.App.Fota
 {
     /// <summary>
-    /// FOTA 버전·URL·단일 GET 요청을 장치 펌웨어의 고정 헤더로 보내고, 200 응답 본문을 기록 폴더 아래 <c>fota</c>에 저장한다(C14~C16).
-    /// 요청마다 시간 제한과 크기 상한을 두며, 받은 파일은 실행하지 않는다.
+    /// FOTA 이미지 요청(받은 URL + 반대편 슬롯 접미사)과 단일 GET 요청을 장치 펌웨어의 고정 헤더로 보내고,
+    /// 200 응답 본문을 기록 폴더 아래 <c>fota</c>에 저장한다. 요청마다 시간 제한과 크기 상한을 두며, 받은 파일은 실행하지 않는다.
     /// </summary>
     internal sealed class FotaDownloader : IDisposable
     {
-        public const string PurposeVersion = "version";
-        public const string PurposeUrl = "url";
+        public const string PurposeImage = "image";
         public const string PurposeGet = "get";
 
         private readonly FakeDeviceOptions options;
@@ -57,15 +56,14 @@ namespace Biz.Bizadm.PowerManager.FakeDevice.App.Fota
             return request;
         }
 
-        /// <summary>URL 끝의 <c>/</c>를 모두 지우고 <c>/version</c>을 붙인다.</summary>
-        public static string VersionUrl(string url) => url.TrimEnd('/') + "/version";
+        /// <summary>
+        /// 장치처럼 받은 URL 문자열 끝에 슬롯 접미사를 그대로 붙인다. 장치는 호스트 뒤 경로 필드 끝에 붙이므로 결과가 같다(끝 <c>/</c>도 손대지 않음).
+        /// </summary>
+        public static string ImageUrl(string url, string suffix) => url + suffix;
 
-        /// <summary>버전 요청과 URL 요청을 차례로 보낸다. 버전 결과와 관계없이 둘째를 보낸다.</summary>
-        public async Task DownloadPairAsync(string url, CancellationToken cancellationToken)
-        {
-            await DownloadAsync(VersionUrl(url), PurposeVersion, cancellationToken);
-            await DownloadAsync(url, PurposeUrl, cancellationToken);
-        }
+        /// <summary>장치와 같은 이미지 요청 하나(<c>GET {URL}{접미사}</c>)를 보낸다. 버전 요청은 보내지 않는다.</summary>
+        public Task DownloadImageAsync(string url, CancellationToken cancellationToken)
+            => DownloadAsync(ImageUrl(url, options.FotaSuffix), PurposeImage, cancellationToken);
 
         /// <summary>요청 하나를 보낸다. 실패해도 예외를 던지지 않고 기록·콘솔에 남긴다.</summary>
         public async Task DownloadAsync(string url, string purpose, CancellationToken cancellationToken)
@@ -97,22 +95,18 @@ namespace Biz.Bizadm.PowerManager.FakeDevice.App.Fota
                     return;
                 }
 
-                bool save = status == 200;
-                bool keepBody = purpose == PurposeVersion;
-                if (!save && !keepBody)
+                if (status != 200)
                 {
-                    await recorder.FotaResponseAsync(new FotaResponseRecord(id, url, status, contentType, contentLength, contentEncoding, location, null, null, null, null));
+                    await recorder.FotaResponseAsync(new FotaResponseRecord(id, url, status, contentType, contentLength, contentEncoding, location, null, null, null));
                     await output.WriteLineAsync($"FOTA #{id} status {status}");
                     return;
                 }
 
                 await using Stream body = await response.Content.ReadAsStreamAsync(timeout.Token);
                 using IncrementalHash hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
-                using MemoryStream? kept = keepBody ? new MemoryStream() : null;
                 long total = 0;
-                if (save)
-                    Directory.CreateDirectory(directory);
-                await using (FileStream? file = save ? new FileStream(partPath, FileMode.CreateNew, FileAccess.Write, FileShare.None) : null)
+                Directory.CreateDirectory(directory);
+                await using (FileStream file = new FileStream(partPath, FileMode.CreateNew, FileAccess.Write, FileShare.None))
                 {
                     byte[] buffer = new byte[81920];
                     int read;
@@ -121,28 +115,19 @@ namespace Biz.Bizadm.PowerManager.FakeDevice.App.Fota
                         total += read;
                         if (total > options.FotaMaxBytes)
                         {
-                            if (file is not null)
-                                await file.DisposeAsync();
+                            await file.DisposeAsync();
                             await FailAsync(id, url, "too-large");
                             return;
                         }
                         hash.AppendData(buffer, 0, read);
-                        if (file is not null)
-                            await file.WriteAsync(buffer.AsMemory(0, read), timeout.Token);
-                        kept?.Write(buffer, 0, read);
+                        await file.WriteAsync(buffer.AsMemory(0, read), timeout.Token);
                     }
                 }
                 string sha256 = Convert.ToHexStringLower(hash.GetHashAndReset());
-                string? recordedFile = null;
-                if (save)
-                {
-                    File.Move(partPath, filePath);
-                    recordedFile = "fota/" + fileName;
-                }
-                await recorder.FotaResponseAsync(new FotaResponseRecord(id, url, status, contentType, contentLength, contentEncoding, location, total, sha256, recordedFile, kept?.ToArray()));
-                await output.WriteLineAsync(save
-                    ? $"FOTA #{id} status {status}, {total} bytes, sha256 {sha256}, saved {recordedFile}"
-                    : $"FOTA #{id} status {status}, {total} bytes");
+                File.Move(partPath, filePath);
+                string recordedFile = "fota/" + fileName;
+                await recorder.FotaResponseAsync(new FotaResponseRecord(id, url, status, contentType, contentLength, contentEncoding, location, total, sha256, recordedFile));
+                await output.WriteLineAsync($"FOTA #{id} status {status}, {total} bytes, sha256 {sha256}, saved {recordedFile}");
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {
