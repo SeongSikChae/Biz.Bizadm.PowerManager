@@ -124,6 +124,7 @@ namespace Biz.Bizadm.PowerManager.Server.Spa
             builder.Services.AddSingleton<DeviceRegistrationService>();
             // hosted service는 등록 순서대로 시작하므로, 브로커가 키를 조회하기 전에 마이그레이션이 끝나게 앞에 둔다.
             builder.Services.AddHostedService<DatabaseMigrationHostedService>();
+            builder.Services.AddSingleton<MqttServerAccessor>();
             builder.Services.AddSingleton<IDeviceMessageHandler, LoggingDeviceMessageHandler>();
             builder.Services.AddSingleton<IDeviceCommandPublisher, MqttDeviceCommandPublisher>();
             builder.Services.AddHostedService<MqttBrokerHostedService>();

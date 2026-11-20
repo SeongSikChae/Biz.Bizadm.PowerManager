@@ -172,6 +172,37 @@ public sealed class DawonRelayMqttTests
         protected override object? Invoke(System.Reflection.MethodInfo? targetMethod, object?[]? args) => null;
     }
 
+    // tisyn-response C3: 중계 모드에서는 기본 핸들러가 tisyn을 로그로 남기기만 하고 /99/0/1 응답을 보내지 않는다.
+    // 핸들러를 바꾸는 StartAsync 도우미를 쓰지 않고 기본 LoggingDeviceMessageHandler로 띄운다.
+    [TestMethod]
+    public async Task TimeSync_RelayMode_DefaultHandlerDoesNotRespond()
+    {
+        const string timeSyncTopic = "dwd.v1/" + DeviceKey + "/iot-server/timesync/json";
+        const string markerTopic = DownlinkTopic + "/marker";
+        AppConfiguration configuration = Configuration();
+        Receiver receiver = new Receiver();
+        await using (WebApplication app = await TestApp.StartAsync(configuration, Path.Combine(tempRoot, "log")))
+        {
+            using IMqttClient client = receiver.Attach(new MqttClientFactory().CreateMqttClient());
+            await client.ConnectAsync(RelayOptions(configuration).Build());
+            await client.SubscribeAsync(DownlinkTopic + "/#", MqttQualityOfServiceLevel.AtLeastOnce);
+
+            await client.PublishStringAsync(timeSyncTopic, """{"sid":"0","msg":{"o":"tisyn","e":[]}}""", MqttQualityOfServiceLevel.AtLeastOnce);
+            // 같은 클라이언트의 QoS 1 발행은 순서대로 처리되므로, 뒤에 보낸 표시 메시지를 받으면 tisyn 처리(응답 여부)가 끝난 것이다.
+            await client.PublishStringAsync(markerTopic, "marker", MqttQualityOfServiceLevel.AtLeastOnce);
+            await WaitUntilAsync(() => receiver.Messages.Any(m => m.Topic == markerTopic), "표시 메시지가 오지 않았다.");
+            await WaitUntilAsync(() => broker.Publishes.Any(p => p.Topic == timeSyncTopic), "tisyn이 다원으로 중계되지 않았다.");
+
+            await client.DisconnectAsync();
+            await app.StopAsync();
+        }
+
+        Assert.IsFalse(receiver.Messages.Any(m => Text(m).Contains("/99/0/1")), "중계 모드에서 서버가 시간 동기 응답을 보냈다.");
+        string log = ReadAllText("log");
+        StringAssert.Contains(log, "Device message \"tisyn\"");
+        Assert.DoesNotContain("Time sync response sent", log);
+    }
+
     // ---------- 가짜 브로커 전제 ----------
 
     // T017: 가짜 브로커가 받은 필터 순서대로 지정한 SUBACK 결과를 돌려준다(MQTTnet의 QoS 정렬을 되돌림).

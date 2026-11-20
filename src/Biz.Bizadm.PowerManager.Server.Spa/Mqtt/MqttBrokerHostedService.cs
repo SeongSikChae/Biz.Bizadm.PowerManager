@@ -18,7 +18,8 @@ namespace Biz.Bizadm.PowerManager.Server.Spa.Mqtt
     /// 접속 인증은 하지 않으며, 접속마다 자격 증명이 등록 키와 맞는지 관찰 로그만 남긴다.
     /// </summary>
     public sealed class MqttBrokerHostedService(AppConfiguration configuration, IDeviceMessageHandler handler,
-        DeviceRegistrationService registrations, ILogger<MqttBrokerHostedService> logger, DawonMqttRelay? relay = null)
+        DeviceRegistrationService registrations, MqttServerAccessor accessor, ILogger<MqttBrokerHostedService> logger,
+        DawonMqttRelay? relay = null)
         : IHostedService, IAsyncDisposable
     {
         /// <summary>
@@ -61,6 +62,8 @@ namespace Biz.Bizadm.PowerManager.Server.Spa.Mqtt
                 server.ClientDisconnectedAsync += relay.OnClientDisconnectedAsync;
             }
             await server.StartAsync();
+            // 핸들러가 서버 → 장치 메시지(tisyn 응답)를 주입할 수 있게 시작한 브로커를 넘긴다.
+            accessor.Server = server;
             logger.LogInformation("MQTT broker started: port={MqttPort}, tlsPort={MqttsPort}",
                 c.MqttPort, certificate is null ? null : c.MqttsPort);
         }
@@ -76,6 +79,7 @@ namespace Biz.Bizadm.PowerManager.Server.Spa.Mqtt
             {
                 MqttServer current = server;
                 server = null;
+                accessor.Server = null;
                 current.InterceptingPublishAsync -= OnPublishAsync;
                 current.ValidatingConnectionAsync -= OnValidatingConnectionAsync;
                 if (relay is not null)
