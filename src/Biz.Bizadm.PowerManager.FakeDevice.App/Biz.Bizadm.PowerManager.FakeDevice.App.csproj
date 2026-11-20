@@ -1,0 +1,33 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Biz.Bizadm.KMS" />
+    <PackageReference Include="Biz.Bizadm.KMS.Credentials" />
+    <PackageReference Include="Biz.Bizadm.Serilog.Enrichers.Caller" />
+    <PackageReference Include="Biz.Bizadm.Serilog.Sinks.File.Extensions" />
+    <PackageReference Include="Biz.Bizadm.System.Configuration.Extensions" />
+    <PackageReference Include="CommandLineParser" />
+    <PackageReference Include="Microsoft.Extensions.Hosting" />
+    <PackageReference Include="MQTTnet" />
+    <PackageReference Include="Serilog.Extensions.Hosting" />
+    <PackageReference Include="Serilog.Sinks.Console" />
+    <PackageReference Include="YamlDotNet" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Biz.Bizadm.PowerManager.Core\Biz.Bizadm.PowerManager.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Biz.Bizadm.PowerManager.FakeDevice.App.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Update="config.example.yaml" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+</Project>

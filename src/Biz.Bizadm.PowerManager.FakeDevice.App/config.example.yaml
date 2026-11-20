@@ -1,0 +1,57 @@
+# 다원 가짜 장비 클라이언트 예시 설정. 키는 속성 이름 그대로(PascalCase)다.
+# 실행: Biz.Bizadm.PowerManager.FakeDevice.App --config <이 파일> --log <로그 폴더>
+
+ContentRootPath: ""                  # 상대 경로의 기준. 비우면 실행 폴더
+RecordDirectory: dawon-fake-device   # 기록 폴더(JSONL, fota/ 받은 파일)
+
+# Register.MqttKey 또는 Mqtt.Password를 넣을 때만 필요하다. 첫 실행에서 Salt를 만들고 비밀 값을 암호화(DEKENC:)해 이 파일을 다시 쓴다.
+#OsKms:
+#  CredentialService: https://example.invalid/fake-device
+#  CredentialAccount: fake-device
+#  Salt: ""
+#  Iterations: 600000
+#  SecretsDekFilePath: secrets.dek
+
+Dawon:
+  ApiServerHost: dwapi.dawonai.com
+  ApiServerPort: 18443
+  MqttServerHost: dwmqtt.dawonai.com
+  MqttServerPort: 8883
+  SkipCertificateValidation: false   # REST·MQTT·FOTA
+
+Device:
+  Mac: "000000000000"                # 필수, 12자리 16진수
+  Model: B540_W
+  Company: DAWONDNS
+  UserId: ""
+  Lati: "0"
+  Long: "0"
+  FirmwareVersion: 1.01.36
+
+Register:
+  MqttKey: ""                        # 있으면 등록을 건너뛴다
+  VerifyServerAddr: ""               # 비우면 Dawon.MqttServerHost
+
+Mqtt:
+  ClientId: ""                       # 비우면 {Company}-{mac}
+  UserName: ""                       # 비우면 {Company}-{Model}-{mac}
+  Password: ""                       # 비우면 mqtt_key
+  KeepAliveSeconds: 60
+  TopicPrefix: dwd
+  WillTopic: /lwt
+  WillPayload: offline
+
+Publish:
+  SendRegister: true
+  SendTimeSync: true
+  RegisterSuffix: json
+  QoS: 0
+  TimeSyncIntervalSeconds: 0         # 0이면 접속 직후 한 번만
+  NotifyIntervalSeconds: 0           # 0이면 상태 보고를 보내지 않는다
+  NotifyElements:
+    - N: /100/0/31
+      Sv: "false"
+
+Fota:
+  AutoDownload: true
+  UserAgent: "Mozilla/5.0 (Windows NT 5.1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/30.0.1599.101 Safari/537.36"
