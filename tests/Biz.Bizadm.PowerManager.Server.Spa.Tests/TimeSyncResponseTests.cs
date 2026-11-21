@@ -208,6 +208,54 @@ public sealed class TimeSyncResponseTests
         await app.StopAsync();
     }
 
+    private static string ResponseSentLine => $"Time sync response sent: device=\"{DeviceKey}\", topic=\"{DownlinkTopic}\"";
+    private static string UnparsedDownlinkLine => $"Unparsed topic passed through: \"{DownlinkTopic}\"";
+
+    /// <summary>
+    /// 로그에 모든 문장이 나타날 때까지 기다린다. R5 응답 로그는 주입의 await가 끝난 뒤 쓰여 R7·R12·R13보다 늦으므로,
+    /// R5 줄까지 기다리면 R7 로그가 있었다면 이미 쓰여 있다(injected-message-log D001).
+    /// </summary>
+    private async Task WaitForLogsAsync(params string[] lines)
+        => await WaitUntilAsync(() => { string log = ReadLogs(); return lines.All(l => log.Contains(l, StringComparison.Ordinal)); },
+            "로그에 기대한 줄이 나타나지 않았다: " + string.Join(" | ", lines));
+
+    // injected-message-log C1: 구독자가 있으면 주입 응답은 전달되고 큐 넣음·응답 로그는 남지만 해석 불가 토픽 로그는 남지 않는다.
+    [TestMethod]
+    public async Task InjectedResponse_WithSubscriber_DoesNotLogUnparsedTopic()
+    {
+        AppConfiguration configuration = TestApp.Configuration(tempRoot);
+        await using WebApplication app = await StartAsync(configuration);
+        List<MqttApplicationMessage> messages = await SendTimeSyncAsync(configuration, """{"sid":"5","msg":{"o":"tisyn","e":[]}}""");
+        Assert.AreEqual(DownlinkTopic, messages.Single().Topic);
+
+        await WaitForLogsAsync(
+            $"Downlink message enqueued: sender=\"power-manager\", receiver=\"subscriber\", topic=\"{DownlinkTopic}\"",
+            ResponseSentLine);
+        Assert.IsFalse(ReadLogs().Contains(UnparsedDownlinkLine, StringComparison.Ordinal), "주입 응답이 해석 불가 토픽 로그로 남았다.");
+        await app.StopAsync();
+    }
+
+    // injected-message-log C1: 구독자가 없으면 구독자 없음·응답 로그는 남지만 해석 불가 토픽 로그는 남지 않는다.
+    [TestMethod]
+    public async Task InjectedResponse_WithoutSubscriber_DoesNotLogUnparsedTopic()
+    {
+        AppConfiguration configuration = TestApp.Configuration(tempRoot);
+        await using WebApplication app = await StartAsync(configuration);
+        using (IMqttClient device = new MqttClientFactory().CreateMqttClient())
+        {
+            await device.ConnectAsync(ClientOptions(configuration, "DAWONDNS-3a0000000201"));
+            await device.PublishStringAsync(TimeSyncTopic, """{"sid":"6","msg":{"o":"tisyn","e":[]}}""", MqttQualityOfServiceLevel.AtLeastOnce);
+
+            await WaitForLogsAsync(
+                $"Downlink message not consumed: sender=\"power-manager\", topic=\"{DownlinkTopic}\"",
+                ResponseSentLine);
+            await device.DisconnectAsync();
+        }
+
+        Assert.IsFalse(ReadLogs().Contains(UnparsedDownlinkLine, StringComparison.Ordinal), "주입 응답이 해석 불가 토픽 로그로 남았다.");
+        await app.StopAsync();
+    }
+
     // C4: 브로커가 없으면(시작 전·종료 중) 예외 없이 Error 로그만 남긴다.
     [TestMethod]
     public async Task TimeSync_WithoutServer_LogsErrorWithoutThrowing()

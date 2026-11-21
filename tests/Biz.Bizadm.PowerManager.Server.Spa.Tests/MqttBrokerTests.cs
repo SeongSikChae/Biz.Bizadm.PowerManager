@@ -247,6 +247,26 @@ public sealed class MqttBrokerTests
         Assert.IsTrue(handler.Calls.IsEmpty);
     }
 
+    // injected-message-log C2: ClientId가 서버 주입용 이름(power-manager)이어도 클라이언트가 보낸 메시지는 해석 불가 토픽 로그를 남긴다.
+    [TestMethod]
+    public async Task ClientNamedPowerManager_PublishToDownlink_LogsUnparsedTopic()
+    {
+        const string downlinkTopic = "dwd.v1/iot-server/" + DeviceKey;
+        RecordingHandler handler = new RecordingHandler();
+        AppConfiguration configuration = TestApp.Configuration(tempRoot);
+        await using (WebApplication app = await StartAsync(configuration, handler))
+        {
+            using IMqttClient client = new MqttClientFactory().CreateMqttClient();
+            await client.ConnectAsync(ClientOptions(configuration.MqttPort!.Value, "power-manager").Build());
+            await client.PublishStringAsync(downlinkTopic, "hello", MqttQualityOfServiceLevel.AtLeastOnce);
+
+            await WaitForLogAsync($"Unparsed topic passed through: \"{downlinkTopic}\", clientId=\"power-manager\", bytes=5, truncated=False, payload=hello");
+            await client.DisconnectAsync();
+            await app.StopAsync();
+        }
+        Assert.IsTrue(handler.Calls.IsEmpty);
+    }
+
     [TestMethod]
     public async Task UnparsedTopic_LargePayload_IsTruncatedTo4096Bytes()
     {

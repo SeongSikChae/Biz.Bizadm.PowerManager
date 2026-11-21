@@ -4,6 +4,7 @@ using Biz.Bizadm.PowerManager.Server.Core;
 using Biz.Bizadm.PowerManager.Server.Spa.Devices;
 using MQTTnet.Server;
 using System.Buffers;
+using System.Collections;
 using System.Security.Authentication;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
@@ -18,6 +19,7 @@ namespace Biz.Bizadm.PowerManager.Server.Spa.Mqtt
     /// 전달 문제를 가리려고 클라이언트의 구독·구독 해제와, 서버 → 장치 메시지가 어느 클라이언트 큐에 들어갔는지·구독자가 없었는지를 로그로 남긴다
     /// (구독·전달 동작은 바꾸지 않는다).
     /// 장비가 나뉜 패킷을 처리하지 못하므로 두 엔드포인트 모두 MQTT 패킷을 한 번에 쓴다(<see cref="BuildServerOptions"/>).
+    /// 서버가 주입한 메시지(<c>CustomSessionItems</c> 없이 주입한 것, 예: tisyn 응답)는 해석 불가 토픽 로그를 남기지 않는다(<see cref="IsInjected"/>).
     /// </summary>
     public sealed class MqttBrokerHostedService(AppConfiguration configuration, IDeviceMessageHandler handler,
         DeviceRegistrationService registrations, MqttServerAccessor accessor, ILogger<MqttBrokerHostedService> logger)
@@ -30,6 +32,12 @@ namespace Biz.Bizadm.PowerManager.Server.Spa.Mqtt
 
         private MqttServer? server;
         private X509Certificate2? certificate;
+
+        /// <summary>
+        /// 브로커의 <see cref="MqttServer.ServerSessionItems"/>. 주입 메시지 판정(<see cref="IsInjected"/>)에 쓴다.
+        /// 종료 중에 주입된 메시지도 가리도록 <see cref="server"/>와 달리 브로커를 멈춘 뒤에 비운다.
+        /// </summary>
+        private IDictionary? serverSessionItems;
 
         /// <summary>
         /// 브로커 서버 옵션을 만든다. 비TLS 엔드포인트를 늘 열고, <paramref name="certificate"/>가 있으면 TLS 1.2 엔드포인트도 연다.
@@ -61,6 +69,7 @@ namespace Biz.Bizadm.PowerManager.Server.Spa.Mqtt
                 certificate = TlsCertificateLoader.Load(c.Tls, c.ContentRootPath);
 
             server = new MqttServerFactory().CreateMqttServer(BuildServerOptions(c, certificate));
+            serverSessionItems = server.ServerSessionItems;
             server.InterceptingPublishAsync += OnPublishAsync;
             server.ValidatingConnectionAsync += OnValidatingConnectionAsync;
             server.InterceptingSubscriptionAsync += OnSubscriptionAsync;
@@ -94,6 +103,7 @@ namespace Biz.Bizadm.PowerManager.Server.Spa.Mqtt
                 current.ApplicationMessageNotConsumedAsync -= OnNotConsumedAsync;
                 await current.StopAsync();
                 current.Dispose();
+                serverSessionItems = null;
             }
             certificate?.Dispose();
             certificate = null;
@@ -220,6 +230,10 @@ namespace Biz.Bizadm.PowerManager.Server.Spa.Mqtt
             string topicName = e.ApplicationMessage.Topic;
             if (!DeviceTopic.TryParse(topicName, out DeviceTopic? topic))
             {
+                // 서버가 주입한 메시지는 토픽·페이로드를 서버가 정했고 응답·전달은 R5·R12·R13 로그에 남으므로 기록하지 않고 그대로 전달한다.
+                if (IsInjected(e))
+                    return;
+
                 // 서버→장치 토픽 등은 그대로 전달한다. 실장비 토픽 형태 확인용으로 ClientId·원본 페이로드와 함께 Information으로 남긴다.
                 (long bytes, bool truncated, string text) = DescribePayload(e.ApplicationMessage.Payload);
                 logger.LogInformation(
@@ -259,6 +273,17 @@ namespace Biz.Bizadm.PowerManager.Server.Spa.Mqtt
                 // 핸들러 예외가 브로커 연결 처리로 번지지 않게 로그만 남긴다.
                 logger.LogError(ex, "Device message handling failed: {Topic}", topicName);
             }
+        }
+
+        /// <summary>
+        /// 서버가 브로커에 주입한 메시지인지 가린다. MQTTnet은 <c>CustomSessionItems</c> 없이 주입한 메시지에 <see cref="MqttServer.ServerSessionItems"/>를,
+        /// 클라이언트 PUBLISH와 Will에는 접속마다 새로 만든 세션 항목을 넘긴다. 그래서 ClientId와 상관없이 인스턴스 비교로 가린다.
+        /// <c>CustomSessionItems</c>를 주고 주입한 메시지는 주입으로 보지 않는다(해석 불가 토픽이면 로그를 남긴다).
+        /// </summary>
+        private bool IsInjected(InterceptingPublishEventArgs e)
+        {
+            IDictionary? items = serverSessionItems;
+            return items is not null && ReferenceEquals(e.SessionItems, items);
         }
 
         /// <summary>
