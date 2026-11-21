@@ -3,7 +3,7 @@
 - 작성: 2026-11-03 (KST)
 - 근거: 1~3절은 B540 플래시 덤프의 정적 문자열·설정 섹터 바이트. 3절 오퍼레이션 표의 `r`·`e`·`d`·`tisyn`·`rg`·`drg` 수정과 「서버 → 장치 수신 분기」·「시간 동기」·「오브젝트 99 리소스 처리」 세 절은 2026-11-19 Ghidra 12.2 headless(프로세서 `Xtensa:LE:32`)로 슬롯 B를 정적 디컴파일한 결과다(REA `open_binary`는 Xtensa를 허용하지 않아 Ghidra를 썼다. 메모리 배치는 「서버 → 장치 수신 분기」 절). 그 밖의 B540 코드 흐름 디컴파일과 B540 실제 브로커 통신 관찰은 하지 않았다. 5절은 M130-W 실장비 3대가 내장 브로커(`MqttBrokerHostedService`)에 보낸 메시지 로그(2026-11-19).
 - 표기: **관찰**(덤프(문자열·바이트, 그리고 디컴파일에 직접 나타난 동작) 또는 실장비 통신 로그에 직접 존재), **추정**(관찰을 동작과 연결한 해석), **미확인**. 개인정보·키 값은 마스킹했다.
-- 관련 문서: [REST API](b540-rest-api.md), [FOTA](b540-fota.md), [TCP 설정 수신](b540-tcp-config.md), [분석 색인](b540-rea-analysis.md)
+- 관련 문서: [REST API](b540-rest-api.md), [FOTA](b540-fota.md), [TCP 설정 수신](b540-tcp-config.md), [분석 색인](b540-rea-analysis.md), [장치 MQTT 제어](mqtt-device-control.md)
 
 ## 1. 브로커 접속
 

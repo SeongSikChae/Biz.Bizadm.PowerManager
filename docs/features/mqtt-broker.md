@@ -36,5 +36,6 @@ Server.Spa에 내장한 MQTT 브로커(MQTTnet). 장치 → 서버 메시지를 
 | 2026-11-21 | mqtt-no-fragmentation | R14 추가(비TLS·TLS 엔드포인트 패킷 분할 끔, TLS PUBLISH 레코드 하나) | docs/specs/mqtt-no-fragmentation/ |
 | 2026-11-21 | injected-message-log | R7 바꿈(서버가 주입한 메시지는 해석 불가 토픽 로그 제외, 클라이언트 PUBLISH·Will은 ClientId와 상관없이 유지) | docs/specs/injected-message-log/ |
 | 2026-11-21 | mqtt-connect-auth | R1 바꿈(접속 인증 강제, 끄는 설정 없음), R9 바꿈(Mismatch·Unknown 거부 반환 코드 4, 예외 때 판정 Unknown·거부 반환 코드 3, 거부한 접속도 로그) | docs/specs/mqtt-connect-auth/ |
+| 2026-11-21 | device-control-ref | 없음(근거 문서 docs/reference/mqtt-device-control.md 작성: B540·M130-W 서버 → 장치 제어 오퍼레이션·리소스 분석) | docs/specs/device-control-ref/ |
 
 표에 없는 이전 변경: 기록 없음(docs/server/0001~0003 참조. #1 최초 구현)
