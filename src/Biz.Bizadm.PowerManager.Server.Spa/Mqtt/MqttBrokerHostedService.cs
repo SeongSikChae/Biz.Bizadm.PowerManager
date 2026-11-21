@@ -15,6 +15,8 @@ namespace Biz.Bizadm.PowerManager.Server.Spa.Mqtt
     /// <summary>
     /// 내장 MQTT 브로커. MQTT 포트와 (TLS 사용 시) MQTTS 포트를 열고, 장치 → 서버 메시지를 <see cref="IDeviceMessageHandler"/>로 분배한다.
     /// 접속 인증은 하지 않으며, 접속마다 자격 증명이 등록 키와 맞는지 관찰 로그만 남긴다.
+    /// 전달 문제를 가리려고 클라이언트의 구독·구독 해제와, 서버 → 장치 메시지가 어느 클라이언트 큐에 들어갔는지·구독자가 없었는지를 로그로 남긴다
+    /// (구독·전달 동작은 바꾸지 않는다).
     /// </summary>
     public sealed class MqttBrokerHostedService(AppConfiguration configuration, IDeviceMessageHandler handler,
         DeviceRegistrationService registrations, MqttServerAccessor accessor, ILogger<MqttBrokerHostedService> logger)
@@ -49,6 +51,10 @@ namespace Biz.Bizadm.PowerManager.Server.Spa.Mqtt
             server = factory.CreateMqttServer(optionsBuilder.Build());
             server.InterceptingPublishAsync += OnPublishAsync;
             server.ValidatingConnectionAsync += OnValidatingConnectionAsync;
+            server.InterceptingSubscriptionAsync += OnSubscriptionAsync;
+            server.InterceptingUnsubscriptionAsync += OnUnsubscriptionAsync;
+            server.ApplicationMessageEnqueuedOrDroppedAsync += OnEnqueuedOrDroppedAsync;
+            server.ApplicationMessageNotConsumedAsync += OnNotConsumedAsync;
             await server.StartAsync();
             // 핸들러가 서버 → 장치 메시지(tisyn 응답)를 주입할 수 있게 시작한 브로커를 넘긴다.
             accessor.Server = server;
@@ -70,6 +76,10 @@ namespace Biz.Bizadm.PowerManager.Server.Spa.Mqtt
                 accessor.Server = null;
                 current.InterceptingPublishAsync -= OnPublishAsync;
                 current.ValidatingConnectionAsync -= OnValidatingConnectionAsync;
+                current.InterceptingSubscriptionAsync -= OnSubscriptionAsync;
+                current.InterceptingUnsubscriptionAsync -= OnUnsubscriptionAsync;
+                current.ApplicationMessageEnqueuedOrDroppedAsync -= OnEnqueuedOrDroppedAsync;
+                current.ApplicationMessageNotConsumedAsync -= OnNotConsumedAsync;
                 await current.StopAsync();
                 current.Dispose();
             }
@@ -104,6 +114,93 @@ namespace Biz.Bizadm.PowerManager.Server.Spa.Mqtt
 
             logger.LogInformation("MQTT client connecting: clientId={ClientId}, userName={UserName}, hasPassword={HasPassword}, passwordCheck={PasswordCheck}",
                 e.ClientId, e.UserName, hasPassword, check);
+        }
+
+        // 아래 네 처리기는 MQTTnet이 예외를 잡지 않고 부르므로(전달 이벤트의 예외는 남은 구독자 전달을, 구독 이벤트의 예외는
+        // SUBSCRIBE·UNSUBSCRIBE 처리를 막는다) 예외를 밖으로 내보내지 않는다. 구독 해제 이벤트는 브로커의 잠금 안에서 불리므로
+        // 모두 await 없이 동기로 끝낸다. 이벤트 인자의 처리 여부 속성은 바꾸지 않는다.
+
+        private Task OnSubscriptionAsync(InterceptingSubscriptionEventArgs e)
+        {
+            try
+            {
+                logger.LogInformation("MQTT client subscribe: clientId={ClientId}, topicFilter={TopicFilter}, qos={Qos}",
+                    e.ClientId, e.TopicFilter.Topic, (int)e.TopicFilter.QualityOfServiceLevel);
+            }
+            catch (Exception ex)
+            {
+                TryLogHandlerError(ex, nameof(OnSubscriptionAsync));
+            }
+            return Task.CompletedTask;
+        }
+
+        private Task OnUnsubscriptionAsync(InterceptingUnsubscriptionEventArgs e)
+        {
+            try
+            {
+                logger.LogInformation("MQTT client unsubscribe: clientId={ClientId}, topicFilter={TopicFilter}", e.ClientId, e.Topic);
+            }
+            catch (Exception ex)
+            {
+                TryLogHandlerError(ex, nameof(OnUnsubscriptionAsync));
+            }
+            return Task.CompletedTask;
+        }
+
+        /// <summary>
+        /// 서버 → 장치 메시지를 구독 클라이언트 큐에 넣었으면 받는 클라이언트마다 남긴다. 버림(<c>IsDropped</c>)은 남기지 않는다
+        /// (기본 넘침 정책 <c>DropOldestQueuedMessage</c>에서는 생기지 않는다).
+        /// </summary>
+        private Task OnEnqueuedOrDroppedAsync(ApplicationMessageEnqueuedEventArgs e)
+        {
+            try
+            {
+                string topic = e.ApplicationMessage.Topic;
+                if (!e.IsDropped && DeviceTopic.IsToDevice(topic))
+                {
+                    logger.LogInformation("Downlink message enqueued: sender={SenderClientId}, receiver={ReceiverClientId}, topic={Topic}",
+                        e.SenderClientId, e.ReceiverClientId, topic);
+                }
+            }
+            catch (Exception ex)
+            {
+                TryLogHandlerError(ex, nameof(OnEnqueuedOrDroppedAsync));
+            }
+            return Task.CompletedTask;
+        }
+
+        /// <summary>
+        /// 서버 → 장치 메시지에 맞는 구독이 없어 아무 클라이언트에게도 가지 않았으면 남긴다.
+        /// 장치 → 서버 메시지도 구독자가 없어 매번 이 이벤트가 오지만 토픽으로 걸러 남기지 않는다.
+        /// </summary>
+        private Task OnNotConsumedAsync(ApplicationMessageNotConsumedEventArgs e)
+        {
+            try
+            {
+                string topic = e.ApplicationMessage.Topic;
+                if (DeviceTopic.IsToDevice(topic))
+                    logger.LogWarning("Downlink message not consumed: sender={SenderClientId}, topic={Topic}", e.SenderId, topic);
+            }
+            catch (Exception ex)
+            {
+                TryLogHandlerError(ex, nameof(OnNotConsumedAsync));
+            }
+            return Task.CompletedTask;
+        }
+
+        /// <summary>
+        /// 기록 처리기의 예외를 Error 로그로 한 번 남기려 하고, 그것도 실패하면 무시한다(브로커 처리로 번지지 않게).
+        /// </summary>
+        private void TryLogHandlerError(Exception exception, string handlerName)
+        {
+            try
+            {
+                logger.LogError(exception, "MQTT broker log handler failed: {Handler}", handlerName);
+            }
+            catch
+            {
+                // 로그 자체가 실패하면 할 수 있는 일이 없다.
+            }
         }
 
         private async Task OnPublishAsync(InterceptingPublishEventArgs e)

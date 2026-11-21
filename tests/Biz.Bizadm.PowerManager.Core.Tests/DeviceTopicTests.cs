@@ -31,6 +31,22 @@ public sealed class DeviceTopicTests
     }
 
     [TestMethod]
+    [DataRow("dwd.v1/iot-server/" + Key)]
+    [DataRow("dwd.v1/iot-server/" + Key + "/write/json")]
+    [DataRow("/dwd.v1//iot-server/" + Key)]
+    public void IsToDevice_ServerToDeviceTopic_ReturnsTrue(string topic)
+        => Assert.IsTrue(DeviceTopic.IsToDevice(topic));
+
+    [TestMethod]
+    [DataRow(".v1/iot-server/" + Key)]
+    [DataRow("dwd.v1/iot-server")]
+    [DataRow("dwd.v1/" + Key + "/iot-server/json")]
+    [DataRow("/lwt")]
+    [DataRow("dwd/iot-server/" + Key)]
+    public void IsToDevice_OtherTopic_ReturnsFalse(string topic)
+        => Assert.IsFalse(DeviceTopic.IsToDevice(topic));
+
+    [TestMethod]
     public void ToDevice_BuildsServerToDeviceTopic()
         => Assert.AreEqual("dwd.v1/iot-server/" + Key, DeviceTopic.ToDevice("dwd", Key));
 }

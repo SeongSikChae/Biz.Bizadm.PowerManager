@@ -5,7 +5,8 @@ namespace Biz.Bizadm.PowerManager.Core.Mqtt
     /// <summary>
     /// 장치 → 서버: <c>{prefix}.v1/{deviceKey}/iot-server/{suffix}</c> (suffix: json, timesync 등).
     /// LWT: 같은 접두 + <c>/lwt</c>(추정. 근거 문서는 <c>/lwt</c> 접미만 관찰했고 결합 형태는 미확인이라 빈 토큰은 무시).
-    /// 서버 → 장치: <c>{prefix}.v1/iot-server/{deviceKey}</c>.
+    /// 서버 → 장치: <c>{prefix}.v1/iot-server/{deviceKey}</c>. 다원 서버는 뒤에 접미(<c>/write/json</c> 등)를 붙여 보내며,
+    /// 장치는 <c>{prefix}.v1/iot-server/{deviceKey}/#</c>로 구독해 두 형태를 모두 받는다(<see cref="IsToDevice"/>).
     /// </summary>
     public sealed record DeviceTopic(string Prefix, string DeviceKey, DeviceTopicKind Kind)
     {
@@ -26,6 +27,19 @@ namespace Biz.Bizadm.PowerManager.Core.Mqtt
             DeviceTopicKind kind = parts[^1] == "lwt" ? DeviceTopicKind.Lwt : DeviceTopicKind.Uplink;
             result = new DeviceTopic(parts[0][..^VersionSuffix.Length], parts[1], kind);
             return true;
+        }
+
+        /// <summary>
+        /// 서버 → 장치 토픽인지 판정한다. 빈 토큰을 빼고 토큰이 3개 이상이며, 첫 토큰이 접두가 비지 않은 <c>{prefix}.v1</c>이고
+        /// 둘째 토큰이 <c>iot-server</c>이면 참이다(<see cref="ToDevice"/> 형태와 그 뒤에 접미가 붙은 형태).
+        /// </summary>
+        public static bool IsToDevice(string topic)
+        {
+            string[] parts = topic.Split('/', StringSplitOptions.RemoveEmptyEntries);
+            return parts.Length >= 3
+                && parts[0].Length > VersionSuffix.Length
+                && parts[0].EndsWith(VersionSuffix, StringComparison.Ordinal)
+                && parts[1] == ServerToken;
         }
 
         public static string ToDevice(string prefix, string deviceKey) => $"{prefix}{VersionSuffix}/{ServerToken}/{deviceKey}";
