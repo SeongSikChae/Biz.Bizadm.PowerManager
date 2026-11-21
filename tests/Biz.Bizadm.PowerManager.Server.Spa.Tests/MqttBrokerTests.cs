@@ -11,8 +11,6 @@ using System.Collections.Concurrent;
 using System.Net;
 using System.Net.Sockets;
 using System.Security.Authentication;
-using System.Security.Cryptography;
-using System.Security.Cryptography.X509Certificates;
 using System.Text;
 
 namespace Biz.Bizadm.PowerManager.Server.Spa.Tests;
@@ -273,7 +271,7 @@ public sealed class MqttBrokerTests
     [TestMethod]
     public async Task Mqtts_Tls12_PublishRegister_CallsRegister_AndTls13OnlyFails()
     {
-        string thumbprint = WritePfx(Path.Combine(tempRoot, "server.pfx"));
+        string thumbprint = TestApp.WritePfx(Path.Combine(tempRoot, "server.pfx"), PfxPassword);
         AppConfiguration configuration = TestApp.Configuration(tempRoot);
         configuration.Tls = new TlsConfiguration { UseTls = true, ServerCertificate = "server.pfx", ServerCertificatePassword = PfxPassword };
         RecordingHandler handler = new RecordingHandler();
@@ -366,19 +364,6 @@ public sealed class MqttBrokerTests
             await Task.Delay(100);
         }
         Assert.Fail($"로그에 기대 문자열이 없다: {expected}{Environment.NewLine}{ReadLogs()}");
-    }
-
-    private static string WritePfx(string path)
-    {
-        using RSA rsa = RSA.Create(2048);
-        CertificateRequest request = new CertificateRequest("CN=localhost", rsa, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
-        request.CertificateExtensions.Add(new X509EnhancedKeyUsageExtension([new Oid("1.3.6.1.5.5.7.3.1")], false));
-        SubjectAlternativeNameBuilder san = new SubjectAlternativeNameBuilder();
-        san.AddDnsName("localhost");
-        request.CertificateExtensions.Add(san.Build());
-        using X509Certificate2 certificate = request.CreateSelfSigned(DateTimeOffset.UtcNow.AddDays(-1), DateTimeOffset.UtcNow.AddDays(30));
-        File.WriteAllBytes(path, certificate.Export(X509ContentType.Pfx, PfxPassword));
-        return certificate.Thumbprint;
     }
 
     /// <summary>MQTT 3.1(MQIsdp, level 3) CONNECT 패킷. clean session + Will(QoS 0, retain 없음), keepalive 60초.</summary>

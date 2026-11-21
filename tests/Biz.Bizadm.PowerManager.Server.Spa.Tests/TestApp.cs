@@ -5,6 +5,8 @@ using Microsoft.AspNetCore.TestHost;
 using Microsoft.Data.Sqlite;
 using System.Net;
 using System.Net.Sockets;
+using System.Security.Cryptography;
+using System.Security.Cryptography.X509Certificates;
 
 namespace Biz.Bizadm.PowerManager.Server.Spa.Tests;
 
@@ -47,6 +49,22 @@ internal static class TestApp
         SqliteConnection.ClearAllPools();
         if (Directory.Exists(tempRoot))
             Directory.Delete(tempRoot, recursive: true);
+    }
+
+    /// <summary>
+    /// localhost용 자체 서명 서버 인증서를 PFX로 쓰고 지문을 돌려준다(MQTTS 테스트용).
+    /// </summary>
+    public static string WritePfx(string path, string password)
+    {
+        using RSA rsa = RSA.Create(2048);
+        CertificateRequest request = new CertificateRequest("CN=localhost", rsa, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
+        request.CertificateExtensions.Add(new X509EnhancedKeyUsageExtension([new Oid("1.3.6.1.5.5.7.3.1")], false));
+        SubjectAlternativeNameBuilder san = new SubjectAlternativeNameBuilder();
+        san.AddDnsName("localhost");
+        request.CertificateExtensions.Add(san.Build());
+        using X509Certificate2 certificate = request.CreateSelfSigned(DateTimeOffset.UtcNow.AddDays(-1), DateTimeOffset.UtcNow.AddDays(30));
+        File.WriteAllBytes(path, certificate.Export(X509ContentType.Pfx, password));
+        return certificate.Thumbprint;
     }
 
     public static async Task<WebApplication> StartAsync(AppConfiguration configuration, string logDir,

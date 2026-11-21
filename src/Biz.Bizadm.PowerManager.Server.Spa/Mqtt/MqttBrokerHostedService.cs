@@ -17,6 +17,7 @@ namespace Biz.Bizadm.PowerManager.Server.Spa.Mqtt
     /// 접속 인증은 하지 않으며, 접속마다 자격 증명이 등록 키와 맞는지 관찰 로그만 남긴다.
     /// 전달 문제를 가리려고 클라이언트의 구독·구독 해제와, 서버 → 장치 메시지가 어느 클라이언트 큐에 들어갔는지·구독자가 없었는지를 로그로 남긴다
     /// (구독·전달 동작은 바꾸지 않는다).
+    /// 장비가 나뉜 패킷을 처리하지 못하므로 두 엔드포인트 모두 MQTT 패킷을 한 번에 쓴다(<see cref="BuildServerOptions"/>).
     /// </summary>
     public sealed class MqttBrokerHostedService(AppConfiguration configuration, IDeviceMessageHandler handler,
         DeviceRegistrationService registrations, MqttServerAccessor accessor, ILogger<MqttBrokerHostedService> logger)
@@ -30,25 +31,36 @@ namespace Biz.Bizadm.PowerManager.Server.Spa.Mqtt
         private MqttServer? server;
         private X509Certificate2? certificate;
 
-        public async Task StartAsync(CancellationToken cancellationToken)
+        /// <summary>
+        /// 브로커 서버 옵션을 만든다. 비TLS 엔드포인트를 늘 열고, <paramref name="certificate"/>가 있으면 TLS 1.2 엔드포인트도 연다.
+        /// 두 엔드포인트 모두 패킷 분할을 끈다. 분할을 허용하면 MQTTnet이 페이로드 있는 패킷을 머리와 페이로드로 나눠 두 번 쓰고
+        /// (TLS에서는 레코드 두 개), 장비 MQTT 라이브러리는 여러 수신에 걸친 패킷을 합치지 않는 것으로 보여 서버 → 장치 메시지가 버려진다.
+        /// </summary>
+        public static MqttServerOptions BuildServerOptions(AppConfiguration configuration, X509Certificate2? certificate)
         {
-            AppConfiguration c = configuration;
-            MqttServerFactory factory = new MqttServerFactory();
-            MqttServerOptionsBuilder optionsBuilder = factory.CreateServerOptionsBuilder()
+            MqttServerOptionsBuilder optionsBuilder = new MqttServerFactory().CreateServerOptionsBuilder()
                 .WithDefaultEndpoint()
-                .WithDefaultEndpointPort(c.MqttPort!.Value);
+                .WithDefaultEndpointPort(configuration.MqttPort!.Value);
 
-            if (c.Tls?.UseTls == true)
+            if (certificate is not null)
             {
-                certificate = TlsCertificateLoader.Load(c.Tls, c.ContentRootPath);
                 optionsBuilder = optionsBuilder
                     .WithEncryptedEndpoint()
-                    .WithEncryptedEndpointPort(c.MqttsPort!.Value)
+                    .WithEncryptedEndpointPort(configuration.MqttsPort!.Value)
                     .WithEncryptionCertificate(certificate)          // 체인·cipher는 적용하지 않는다(Kestrel만)
                     .WithEncryptionSslProtocol(SslProtocols.Tls12);  // 장치 mbedTLS는 TLS 1.0~1.2
             }
 
-            server = factory.CreateMqttServer(optionsBuilder.Build());
+            return optionsBuilder.WithoutPacketFragmentation().Build();
+        }
+
+        public async Task StartAsync(CancellationToken cancellationToken)
+        {
+            AppConfiguration c = configuration;
+            if (c.Tls?.UseTls == true)
+                certificate = TlsCertificateLoader.Load(c.Tls, c.ContentRootPath);
+
+            server = new MqttServerFactory().CreateMqttServer(BuildServerOptions(c, certificate));
             server.InterceptingPublishAsync += OnPublishAsync;
             server.ValidatingConnectionAsync += OnValidatingConnectionAsync;
             server.InterceptingSubscriptionAsync += OnSubscriptionAsync;

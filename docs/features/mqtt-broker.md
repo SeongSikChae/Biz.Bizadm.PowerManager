@@ -1,8 +1,8 @@
 # mqtt-broker
 
-파일: src/Biz.Bizadm.PowerManager.Server.Spa/Mqtt/MqttBrokerHostedService.cs, src/Biz.Bizadm.PowerManager.Server.Spa/Mqtt/LoggingDeviceMessageHandler.cs, src/Biz.Bizadm.PowerManager.Server.Spa/Mqtt/MqttDeviceCommandPublisher.cs, src/Biz.Bizadm.PowerManager.Server.Spa/Mqtt/MqttServerAccessor.cs, src/Biz.Bizadm.PowerManager.Core/Mqtt/DeviceTopic.cs, src/Biz.Bizadm.PowerManager.Core/Mqtt/DeviceTopicKind.cs, src/Biz.Bizadm.PowerManager.Core/Mqtt/MqttEnvelope.cs, src/Biz.Bizadm.PowerManager.Core/Mqtt/MqttOperation.cs, src/Biz.Bizadm.PowerManager.Core/Mqtt/IDeviceMessageHandler.cs, src/Biz.Bizadm.PowerManager.Core/Mqtt/IDeviceCommandPublisher.cs, tests/Biz.Bizadm.PowerManager.Server.Spa.Tests/MqttBrokerTests.cs, tests/Biz.Bizadm.PowerManager.Server.Spa.Tests/TimeSyncResponseTests.cs, tests/Biz.Bizadm.PowerManager.Server.Spa.Tests/MqttSubscribeLogTests.cs, tests/Biz.Bizadm.PowerManager.Core.Tests/DeviceTopicTests.cs, tests/Biz.Bizadm.PowerManager.Core.Tests/SerializationTests.cs
+파일: src/Biz.Bizadm.PowerManager.Server.Spa/Mqtt/MqttBrokerHostedService.cs, src/Biz.Bizadm.PowerManager.Server.Spa/Mqtt/LoggingDeviceMessageHandler.cs, src/Biz.Bizadm.PowerManager.Server.Spa/Mqtt/MqttDeviceCommandPublisher.cs, src/Biz.Bizadm.PowerManager.Server.Spa/Mqtt/MqttServerAccessor.cs, src/Biz.Bizadm.PowerManager.Core/Mqtt/DeviceTopic.cs, src/Biz.Bizadm.PowerManager.Core/Mqtt/DeviceTopicKind.cs, src/Biz.Bizadm.PowerManager.Core/Mqtt/MqttEnvelope.cs, src/Biz.Bizadm.PowerManager.Core/Mqtt/MqttOperation.cs, src/Biz.Bizadm.PowerManager.Core/Mqtt/IDeviceMessageHandler.cs, src/Biz.Bizadm.PowerManager.Core/Mqtt/IDeviceCommandPublisher.cs, tests/Biz.Bizadm.PowerManager.Server.Spa.Tests/MqttBrokerTests.cs, tests/Biz.Bizadm.PowerManager.Server.Spa.Tests/TimeSyncResponseTests.cs, tests/Biz.Bizadm.PowerManager.Server.Spa.Tests/MqttSubscribeLogTests.cs, tests/Biz.Bizadm.PowerManager.Server.Spa.Tests/MqttPacketFragmentationTests.cs, tests/Biz.Bizadm.PowerManager.Core.Tests/DeviceTopicTests.cs, tests/Biz.Bizadm.PowerManager.Core.Tests/SerializationTests.cs
 
-Server.Spa에 내장한 MQTT 브로커(MQTTnet). 장치 → 서버 메시지를 토픽·SenML 유사 JSON으로 해석해 `IDeviceMessageHandler`로 분배한다. 기본 핸들러는 받은 내용을 로그로 남기고, 시간 동기 요청(`tisyn`)에만 서버 → 장치 응답을 보낸다(R5, 응답 형식의 근거는 `docs/reference/b540-mqtt-topic.md` 「시간 동기」 절). 서버 → 장치 명령 발행(`MqttDeviceCommandPublisher`)은 껍데기다. 상세 설계는 `docs/server/0001`~`0003`에 있으며, 토픽·메시지 형태의 근거는 B540 펌웨어 덤프 분석(`docs/reference/b540-mqtt-topic.md`)이다. 실장비(M130-W)에서 근거와 다른 형태(`msg.o` `n`, 장치 키 없는 `/lwt`)가 관찰되어 R6~R8로 확인용 로그를 더했다(2026-11-19). 그 로그로 M130-W의 `n`이 상태 보고(토픽 접미 `notify/json`)임을 확인해 `notify`와 같이 분배한다(R4, 관찰 내용은 근거 문서 5절). 서버 → 장치 메시지가 장비까지 가는지 가리려고, 클라이언트의 구독·구독 해제와 서버 → 장치 메시지의 큐 넣음·구독자 없음을 로그로 남긴다(R10~R13, 구독·전달 동작은 바꾸지 않음).
+Server.Spa에 내장한 MQTT 브로커(MQTTnet). 장치 → 서버 메시지를 토픽·SenML 유사 JSON으로 해석해 `IDeviceMessageHandler`로 분배한다. 기본 핸들러는 받은 내용을 로그로 남기고, 시간 동기 요청(`tisyn`)에만 서버 → 장치 응답을 보낸다(R5, 응답 형식의 근거는 `docs/reference/b540-mqtt-topic.md` 「시간 동기」 절). 서버 → 장치 명령 발행(`MqttDeviceCommandPublisher`)은 껍데기다. 상세 설계는 `docs/server/0001`~`0003`에 있으며, 토픽·메시지 형태의 근거는 B540 펌웨어 덤프 분석(`docs/reference/b540-mqtt-topic.md`)이다. 실장비(M130-W)에서 근거와 다른 형태(`msg.o` `n`, 장치 키 없는 `/lwt`)가 관찰되어 R6~R8로 확인용 로그를 더했다(2026-11-19). 그 로그로 M130-W의 `n`이 상태 보고(토픽 접미 `notify/json`)임을 확인해 `notify`와 같이 분배한다(R4, 관찰 내용은 근거 문서 5절). 서버 → 장치 메시지가 장비까지 가는지 가리려고, 클라이언트의 구독·구독 해제와 서버 → 장치 메시지의 큐 넣음·구독자 없음을 로그로 남긴다(R10~R13, 구독·전달 동작은 바꾸지 않음). 그 로그로 구독·큐 넣음이 정상인데도 장비가 반응하지 않아 TLS 포트를 캡처한 결과, 브로커가 PUBLISH 하나를 TLS 레코드 두 개로 나눠 보내고 있어 두 엔드포인트 모두 패킷 분할을 끈다(R14).
 
 ## 요구(완료 조건)
 
@@ -19,6 +19,7 @@ Server.Spa에 내장한 MQTT 브로커(MQTTnet). 장치 → 서버 메시지를 
 - R11. 클라이언트가 UNSUBSCRIBE를 보내면 그 안의 토픽 필터마다 Information 로그 항목 하나에 ClientId와 토픽 필터를 남긴다. 구독 해제를 거부하지 않는다.
 - R12. 서버 → 장치 토픽 메시지를 브로커가 구독 클라이언트의 큐에 넣을 때마다, 받는 클라이언트마다 Information 로그 항목 하나에 보낸 ClientId(서버가 주입한 메시지는 `power-manager`), 받는 ClientId, 토픽을 남긴다. 서버 → 장치 토픽은 빈 토큰을 빼고 토큰이 3개 이상이며, 첫 토큰이 `.v1`로 끝나고 그 앞 접두가 비지 않으며, 둘째 토큰이 `iot-server`인 토픽이다(R2의 서버 → 장치 토픽과 그 뒤에 접미가 붙은 형태). 그 밖의 토픽(장치 → 서버 토픽, `/lwt` 등)에는 남기지 않는다.
 - R13. 서버 → 장치 토픽(R12) 메시지에 맞는 구독이 없어 아무 클라이언트에게도 가지 않으면 Warning 로그 항목 하나에 보낸 ClientId와 토픽을 남긴다. 서버 → 장치 토픽에만 남긴다.
+- R14. 브로커는 비TLS·TLS 엔드포인트 모두 패킷 분할을 끈 설정(`AllowPacketFragmentation = false`)으로 열어, 클라이언트에 보내는 MQTT 패킷마다 한 번에 쓴다. TLS 엔드포인트에서 MQTT 패킷 전체가 16384바이트 이하인 PUBLISH는 TLS 레코드 하나로 나간다(장비 MQTT 라이브러리가 여러 수신에 걸친 패킷을 합치지 않는 것으로 보여서).
 
 ## 이력
 
@@ -32,5 +33,6 @@ Server.Spa에 내장한 MQTT 브로커(MQTTnet). 장치 → 서버 메시지를 
 | 2026-11-20 | tisyn-response | R5 바꿈(tisyn 응답, 중계 켜짐이면 응답 안 함) | docs/specs/tisyn-response/ |
 | 2026-11-20 | dawon-relay-removal | R1·R9 바꿈(중계 모드 단서 삭제), R5 바꿈(중계 조건 없이 `tisyn`마다 응답) | docs/specs/dawon-relay-removal/ |
 | 2026-11-21 | mqtt-subscribe-log | R10~R13 추가(구독·구독 해제, 서버 → 장치 메시지 큐 넣음·구독자 없음 로그) | docs/specs/mqtt-subscribe-log/ |
+| 2026-11-21 | mqtt-no-fragmentation | R14 추가(비TLS·TLS 엔드포인트 패킷 분할 끔, TLS PUBLISH 레코드 하나) | docs/specs/mqtt-no-fragmentation/ |
 
 표에 없는 이전 변경: 기록 없음(docs/server/0001~0003 참조. #1 최초 구현)
