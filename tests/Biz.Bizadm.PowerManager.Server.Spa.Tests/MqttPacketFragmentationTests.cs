@@ -21,6 +21,7 @@ namespace Biz.Bizadm.PowerManager.Server.Spa.Tests;
 public sealed class MqttPacketFragmentationTests
 {
     private const string DeviceClientId = "DAWONDNS-3a0000000401";
+    private const string SubscriberMac = "3a0000000411";
     private const string DeviceKey = "DAWONDNS-M130-W-3a0000000401";
     private const string TimeSyncTopic = "dwd.v1/" + DeviceKey + "/iot-server/timesync/json";
     private const string DownlinkTopic = "dwd.v1/iot-server/" + DeviceKey;
@@ -73,6 +74,9 @@ public sealed class MqttPacketFragmentationTests
 
         await using (WebApplication app = await TestApp.StartAsync(configuration, Path.Combine(tempRoot, "log")))
         {
+            // 브로커는 등록 장치의 발급 키 접속만 받는다(mqtt-connect-auth).
+            TestDevice subscriber = await TestDevices.RegisterAsync(app, SubscriberMac);
+            TestDevice deviceIdentity = await TestDevices.RegisterAsync(app, DeviceClientId["DAWONDNS-".Length..]);
             using TcpClient tcp = new TcpClient();
             await tcp.ConnectAsync("127.0.0.1", configuration.MqttsPort!.Value, cts.Token);
             RecordingStream recorder = new RecordingStream(tcp.GetStream());
@@ -84,7 +88,7 @@ public sealed class MqttPacketFragmentationTests
                 EnabledSslProtocols = SslProtocols.Tls12,
             }, cts.Token);
 
-            await ssl.WriteAsync(BuildMqtt31Connect("fragtest-raw"), cts.Token);
+            await ssl.WriteAsync(BuildMqtt31Connect(subscriber.ClientId, subscriber.UserName, subscriber.Password), cts.Token);
             Assert.AreEqual(0x20, (await ReadPacketAsync(ssl, cts.Token))[0], "CONNACK");
             await ssl.WriteAsync(BuildSubscribe(DownlinkTopic), cts.Token);
             Assert.AreEqual(0x90, (await ReadPacketAsync(ssl, cts.Token))[0], "SUBACK");
@@ -94,7 +98,7 @@ public sealed class MqttPacketFragmentationTests
             {
                 await device.ConnectAsync(new MqttClientOptionsBuilder()
                     .WithTcpServer("127.0.0.1", configuration.MqttPort!.Value)
-                    .WithClientId(DeviceClientId)
+                    .WithDevice(deviceIdentity)
                     .WithProtocolVersion(MqttProtocolVersion.V310)
                     .WithTimeout(Timeout)
                     .Build(), cts.Token);
@@ -120,16 +124,18 @@ public sealed class MqttPacketFragmentationTests
         }
     }
 
-    /// <summary>MQTT 3.1(MQIsdp, level 3) CONNECT. clean session, keepalive 60초, Will 없음.</summary>
-    private static byte[] BuildMqtt31Connect(string clientId)
+    /// <summary>MQTT 3.1(MQIsdp, level 3) CONNECT. clean session, keepalive 60초, Will 없음, 사용자명·비밀번호 있음.</summary>
+    private static byte[] BuildMqtt31Connect(string clientId, string userName, string password)
     {
         List<byte> body = [];
         AddString(body, "MQIsdp");
         body.Add(3);       // protocol level
-        body.Add(0x02);    // flags: clean session
+        body.Add(0xC2);    // flags: user name + password + clean session
         body.Add(0);
         body.Add(60);      // keepalive
         AddString(body, clientId);
+        AddString(body, userName);
+        AddString(body, password);
         return Packet(0x10, body);
     }
 

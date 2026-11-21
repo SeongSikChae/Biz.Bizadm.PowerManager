@@ -2,6 +2,7 @@ using Biz.Bizadm.PowerManager.Core.Devices;
 using Biz.Bizadm.PowerManager.Core.Mqtt;
 using Biz.Bizadm.PowerManager.Server.Core;
 using Biz.Bizadm.PowerManager.Server.Spa.Devices;
+using MQTTnet.Protocol;
 using MQTTnet.Server;
 using System.Buffers;
 using System.Collections;
@@ -15,7 +16,7 @@ namespace Biz.Bizadm.PowerManager.Server.Spa.Mqtt
 {
     /// <summary>
     /// 내장 MQTT 브로커. MQTT 포트와 (TLS 사용 시) MQTTS 포트를 열고, 장치 → 서버 메시지를 <see cref="IDeviceMessageHandler"/>로 분배한다.
-    /// 접속 인증은 하지 않으며, 접속마다 자격 증명이 등록 키와 맞는지 관찰 로그만 남긴다.
+    /// 등록 장치가 등록 키로 접속할 때만 받고(<see cref="OnValidatingConnectionAsync"/>), 접속마다 자격 증명 판정을 로그로 남긴다.
     /// 전달 문제를 가리려고 클라이언트의 구독·구독 해제와, 서버 → 장치 메시지가 어느 클라이언트 큐에 들어갔는지·구독자가 없었는지를 로그로 남긴다
     /// (구독·전달 동작은 바꾸지 않는다).
     /// 장비가 나뉜 패킷을 처리하지 못하므로 두 엔드포인트 모두 MQTT 패킷을 한 번에 쓴다(<see cref="BuildServerOptions"/>).
@@ -110,32 +111,38 @@ namespace Biz.Bizadm.PowerManager.Server.Spa.Mqtt
         }
 
         /// <summary>
-        /// 접속 자격 증명 관찰(인증 강제 전 형식 확인용). ClientId <c>DAWONDNS-{mac}</c>의 mac이 등록돼 있으면
-        /// 비밀번호를 등록 키와 비교해 Match/Mismatch, 아니면 Unknown으로 남긴다. 비밀번호 값은 남기지 않고, 접속은 모두 받는다.
+        /// 접속 인증. ClientId <c>DAWONDNS-{mac}</c>의 mac이 등록돼 있으면 비밀번호를 등록 키와 비교해 Match/Mismatch, 아니면 Unknown으로 판정한다.
+        /// Match만 받고, Mismatch·Unknown은 <see cref="MqttConnectReasonCode.BadUserNameOrPassword"/>(MQTT 3.1·3.1.1 반환 코드 4),
+        /// 확인 중 예외는 판정을 Unknown으로 둔 채 <see cref="MqttConnectReasonCode.ServerUnavailable"/>(반환 코드 3)로 거부한다.
+        /// 판정은 접속마다(거부 포함) 로그 하나로 남기며, 비밀번호 값은 남기지 않는다.
         /// </summary>
         private async Task OnValidatingConnectionAsync(ValidatingConnectionEventArgs e)
         {
             string? password = e.Password;
             bool hasPassword = !string.IsNullOrEmpty(password);
             string check = "Unknown";
+            MqttConnectReasonCode reasonCode = MqttConnectReasonCode.BadUserNameOrPassword;
             try
             {
                 if (DeviceIdentity.TryParseClientId(e.ClientId, out string? mac)
                     && await registrations.FindMqttKeyAsync(mac, CancellationToken.None) is string key)
                 {
-                    check = hasPassword && CryptographicOperations.FixedTimeEquals(Encoding.UTF8.GetBytes(password!), Encoding.UTF8.GetBytes(key))
-                        ? "Match"
-                        : "Mismatch";
+                    bool match = hasPassword && CryptographicOperations.FixedTimeEquals(Encoding.UTF8.GetBytes(password!), Encoding.UTF8.GetBytes(key));
+                    check = match ? "Match" : "Mismatch";
+                    if (match)
+                        reasonCode = MqttConnectReasonCode.Success;
                 }
             }
             catch (Exception ex)
             {
-                // 관찰 로그 실패로 접속을 막지 않는다.
+                // 확인하지 못한 접속은 받지 않는다(fail-closed).
                 logger.LogError(ex, "MQTT connection credential check failed: {ClientId}", e.ClientId);
+                reasonCode = MqttConnectReasonCode.ServerUnavailable;
             }
 
             logger.LogInformation("MQTT client connecting: clientId={ClientId}, userName={UserName}, hasPassword={HasPassword}, passwordCheck={PasswordCheck}",
                 e.ClientId, e.UserName, hasPassword, check);
+            e.ReasonCode = reasonCode;
         }
 
         // 아래 네 처리기는 MQTTnet이 예외를 잡지 않고 부르므로(전달 이벤트의 예외는 남은 구독자 전달을, 구독 이벤트의 예외는

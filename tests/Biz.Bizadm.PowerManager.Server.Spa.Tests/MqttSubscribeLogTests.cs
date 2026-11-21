@@ -15,6 +15,14 @@ namespace Biz.Bizadm.PowerManager.Server.Spa.Tests;
 public sealed class MqttSubscribeLogTests
 {
     private const string DeviceClientId = "DAWONDNS-3a0000000301";
+    // 브로커는 등록 장치의 발급 키 접속만 받으므로(mqtt-connect-auth) 구독·발행 클라이언트도 등록 장치 ClientId를 쓴다.
+    private const string SubClient = "DAWONDNS-3a0000000311";
+    private const string UnsubClient = "DAWONDNS-3a0000000312";
+    private const string SubA = "DAWONDNS-3a0000000313";
+    private const string SubB = "DAWONDNS-3a0000000314";
+    private const string Writer = "DAWONDNS-3a0000000315";
+    private const string UplinkWatcher = "DAWONDNS-3a0000000316";
+    private const string Publisher = "DAWONDNS-3a0000000317";
     private const string DeviceKey = "DAWONDNS-M130-W-3a0000000301";
     private const string TimeSyncTopic = "dwd.v1/" + DeviceKey + "/iot-server/timesync/json";
     private const string UplinkTopic = "dwd.v1/" + DeviceKey + "/iot-server/notify/json";
@@ -54,19 +62,24 @@ public sealed class MqttSubscribeLogTests
     private Task<WebApplication> StartAsync(AppConfiguration configuration)
         => TestApp.StartAsync(configuration, Path.Combine(tempRoot, "log"));
 
-    private static MqttClientOptions ClientOptions(AppConfiguration configuration, string clientId)
+    private static MqttClientOptions ClientOptions(AppConfiguration configuration, TestDevice device)
         => new MqttClientOptionsBuilder()
             .WithTcpServer("127.0.0.1", configuration.MqttPort!.Value)
-            .WithClientId(clientId)
+            .WithDevice(device)
             .WithProtocolVersion(MqttProtocolVersion.V310)
             .WithTimeout(Timeout)
             .Build();
 
-    private static async Task<IMqttClient> ConnectAsync(AppConfiguration configuration, string clientId, Receiver? receiver = null)
+    /// <summary>
+    /// ClientId(<c>DAWONDNS-{mac}</c>)의 mac을 등록하고 그 발급 키로 접속한다.
+    /// </summary>
+    private static async Task<IMqttClient> ConnectAsync(WebApplication app, AppConfiguration configuration, string clientId, Receiver? receiver = null)
     {
+        TestDevice device = await TestDevices.RegisterAsync(app, clientId["DAWONDNS-".Length..]);
         IMqttClient client = new MqttClientFactory().CreateMqttClient();
         receiver?.Attach(client);
-        await client.ConnectAsync(ClientOptions(configuration, clientId));
+        MqttClientConnectResult result = await client.ConnectAsync(ClientOptions(configuration, device));
+        Assert.AreEqual(MqttClientConnectResultCode.Success, result.ResultCode, clientId);
         return client;
     }
 
@@ -133,7 +146,7 @@ public sealed class MqttSubscribeLogTests
         const string filter0 = "dwd.v1/iot-server/DAWONDNS-M130-W-3a0000000303/#";
 
         Receiver receiver = new Receiver();
-        using IMqttClient subscriber = await ConnectAsync(configuration, "sub-client", receiver);
+        using IMqttClient subscriber = await ConnectAsync(app, configuration, SubClient, receiver);
         MqttClientSubscribeResult result = await subscriber.SubscribeAsync(new MqttClientSubscribeOptionsBuilder()
             .WithTopicFilter(filter1, MqttQualityOfServiceLevel.AtLeastOnce)
             .WithTopicFilter(filter0, MqttQualityOfServiceLevel.AtMostOnce)
@@ -146,10 +159,10 @@ public sealed class MqttSubscribeLogTests
         Assert.AreEqual(filter0, items[1].TopicFilter.Topic);
         Assert.AreEqual(MqttClientSubscribeResultCode.GrantedQoS0, items[1].ResultCode);
 
-        await WaitForLineAsync("Information", $"MQTT client subscribe: clientId=\"sub-client\", topicFilter=\"{filter1}\", qos=1");
-        await WaitForLineAsync("Information", $"MQTT client subscribe: clientId=\"sub-client\", topicFilter=\"{filter0}\", qos=0");
+        await WaitForLineAsync("Information", $"MQTT client subscribe: clientId=\"{SubClient}\", topicFilter=\"{filter1}\", qos=1");
+        await WaitForLineAsync("Information", $"MQTT client subscribe: clientId=\"{SubClient}\", topicFilter=\"{filter0}\", qos=0");
 
-        using IMqttClient publisher = await ConnectAsync(configuration, "publisher");
+        using IMqttClient publisher = await ConnectAsync(app, configuration, Publisher);
         const string topic = "dwd.v1/iot-server/DAWONDNS-M130-W-3a0000000302/write/json";
         await publisher.PublishStringAsync(topic, "hello", MqttQualityOfServiceLevel.AtLeastOnce);
         await WaitUntilAsync(() => receiver.Messages.Any(m => m.Topic == topic), "구독한 필터로 메시지를 받지 못했다.");
@@ -171,15 +184,15 @@ public sealed class MqttSubscribeLogTests
         const string keptTopic = "dwd.v1/iot-server/DAWONDNS-M130-W-3a0000000305";
 
         Receiver receiver = new Receiver();
-        using IMqttClient subscriber = await ConnectAsync(configuration, "unsub-client", receiver);
+        using IMqttClient subscriber = await ConnectAsync(app, configuration, UnsubClient, receiver);
         await subscriber.SubscribeAsync(removedFilter, MqttQualityOfServiceLevel.AtLeastOnce);
         await subscriber.SubscribeAsync(keptFilter, MqttQualityOfServiceLevel.AtLeastOnce);
         await subscriber.UnsubscribeAsync(removedFilter);
 
-        await WaitForLineAsync("Information", $"MQTT client unsubscribe: clientId=\"unsub-client\", topicFilter=\"{removedFilter}\"");
+        await WaitForLineAsync("Information", $"MQTT client unsubscribe: clientId=\"{UnsubClient}\", topicFilter=\"{removedFilter}\"");
 
         // 같은 발행자가 QoS 1로 차례로 보내므로, 남은 필터의 표시 메시지를 받았으면 그 앞의 해제된 토픽 메시지도 처리가 끝났다.
-        using IMqttClient publisher = await ConnectAsync(configuration, "publisher");
+        using IMqttClient publisher = await ConnectAsync(app, configuration, Publisher);
         await publisher.PublishStringAsync(removedTopic, "removed", MqttQualityOfServiceLevel.AtLeastOnce);
         await publisher.PublishStringAsync(keptTopic, "marker", MqttQualityOfServiceLevel.AtLeastOnce);
         await WaitUntilAsync(() => receiver.Messages.Any(m => m.Topic == keptTopic), "남은 필터의 표시 메시지가 오지 않았다.");
@@ -200,21 +213,21 @@ public sealed class MqttSubscribeLogTests
 
         Receiver receiverA = new Receiver();
         Receiver receiverB = new Receiver();
-        using IMqttClient subscriberA = await ConnectAsync(configuration, "sub-a", receiverA);
-        using IMqttClient subscriberB = await ConnectAsync(configuration, "sub-b", receiverB);
+        using IMqttClient subscriberA = await ConnectAsync(app, configuration, SubA, receiverA);
+        using IMqttClient subscriberB = await ConnectAsync(app, configuration, SubB, receiverB);
         await subscriberA.SubscribeAsync(DownlinkFilter, MqttQualityOfServiceLevel.AtLeastOnce);
         await subscriberB.SubscribeAsync(DownlinkFilter, MqttQualityOfServiceLevel.AtLeastOnce);
 
-        using IMqttClient device = await ConnectAsync(configuration, DeviceClientId);
+        using IMqttClient device = await ConnectAsync(app, configuration, DeviceClientId);
         await device.PublishStringAsync(TimeSyncTopic, TimeSyncJson, MqttQualityOfServiceLevel.AtLeastOnce);
-        await WaitForLineAsync("Information", Enqueued("power-manager", "sub-a", DownlinkTopic));
-        await WaitForLineAsync("Information", Enqueued("power-manager", "sub-b", DownlinkTopic));
+        await WaitForLineAsync("Information", Enqueued("power-manager", SubA, DownlinkTopic));
+        await WaitForLineAsync("Information", Enqueued("power-manager", SubB, DownlinkTopic));
 
         const string suffixTopic = DownlinkTopic + "/write/json";
-        using IMqttClient writer = await ConnectAsync(configuration, "writer");
+        using IMqttClient writer = await ConnectAsync(app, configuration, Writer);
         await writer.PublishStringAsync(suffixTopic, """{"sid":"0","msg":{"o":"w","e":[]}}""", MqttQualityOfServiceLevel.AtLeastOnce);
-        await WaitForLineAsync("Information", Enqueued("writer", "sub-a", suffixTopic));
-        await WaitForLineAsync("Information", Enqueued("writer", "sub-b", suffixTopic));
+        await WaitForLineAsync("Information", Enqueued(Writer, SubA, suffixTopic));
+        await WaitForLineAsync("Information", Enqueued(Writer, SubB, suffixTopic));
         await WaitUntilAsync(() => receiverA.Messages.Any(m => m.Topic == suffixTopic) && receiverB.Messages.Any(m => m.Topic == suffixTopic),
             "구독자가 접미 토픽 메시지를 받지 못했다.");
 
@@ -233,11 +246,11 @@ public sealed class MqttSubscribeLogTests
         await using WebApplication app = await StartAsync(configuration);
 
         const string suffixTopic = DownlinkTopic + "/write/json";
-        using IMqttClient writer = await ConnectAsync(configuration, "writer");
+        using IMqttClient writer = await ConnectAsync(app, configuration, Writer);
         await writer.PublishStringAsync(suffixTopic, "x", MqttQualityOfServiceLevel.AtLeastOnce);
-        await WaitForLineAsync("Warning", NotConsumed("writer", suffixTopic));
+        await WaitForLineAsync("Warning", NotConsumed(Writer, suffixTopic));
 
-        using IMqttClient device = await ConnectAsync(configuration, DeviceClientId);
+        using IMqttClient device = await ConnectAsync(app, configuration, DeviceClientId);
         await device.PublishStringAsync(TimeSyncTopic, TimeSyncJson, MqttQualityOfServiceLevel.AtLeastOnce);
         await WaitForLineAsync("Warning", NotConsumed("power-manager", DownlinkTopic));
 
@@ -256,10 +269,10 @@ public sealed class MqttSubscribeLogTests
         await using WebApplication app = await StartAsync(configuration);
 
         Receiver watcher = new Receiver();
-        using IMqttClient uplinkWatcher = await ConnectAsync(configuration, "uplink-watcher", watcher);
+        using IMqttClient uplinkWatcher = await ConnectAsync(app, configuration, UplinkWatcher, watcher);
         await uplinkWatcher.SubscribeAsync("dwd.v1/" + DeviceKey + "/iot-server/#", MqttQualityOfServiceLevel.AtLeastOnce);
 
-        using IMqttClient device = await ConnectAsync(configuration, DeviceClientId);
+        using IMqttClient device = await ConnectAsync(app, configuration, DeviceClientId);
         await device.PublishStringAsync(UplinkTopic, NotifyJson, MqttQualityOfServiceLevel.AtLeastOnce);
         await WaitUntilAsync(() => watcher.Messages.Any(m => m.Topic == UplinkTopic), "장치 → 서버 메시지가 구독자에게 오지 않았다.");
         await device.PublishStringAsync("/lwt", "offline", MqttQualityOfServiceLevel.AtLeastOnce);

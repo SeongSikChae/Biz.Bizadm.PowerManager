@@ -1,7 +1,8 @@
 using Biz.Bizadm.PowerManager.Core.Mqtt;
 using Biz.Bizadm.PowerManager.Server.Core;
-using Biz.Bizadm.PowerManager.Server.Spa.Devices;
+using Biz.Bizadm.PowerManager.Server.Spa.Data;
 using Microsoft.AspNetCore.Builder;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using MQTTnet;
@@ -80,6 +81,13 @@ public sealed class MqttBrokerTests
             .WithClientId(clientId ?? "test-" + Guid.NewGuid().ToString("N")[..8])
             .WithProtocolVersion(MqttProtocolVersion.V310);
 
+    /// <summary>등록 장치로 접속하는 옵션(브로커는 등록 장치의 발급 키 접속만 받는다).</summary>
+    private static MqttClientOptionsBuilder ClientOptions(ushort port, TestDevice device)
+        => ClientOptions(port).WithDevice(device);
+
+    /// <summary>테스트가 쓰는 장치 키(<see cref="DeviceKey"/>)의 mac.</summary>
+    private const string DeviceMac = "aabbccddeeff";
+
     [TestMethod]
     public async Task Mqtt310Client_PublishRegister_CallsRegisterOnce()
     {
@@ -87,8 +95,9 @@ public sealed class MqttBrokerTests
         AppConfiguration configuration = TestApp.Configuration(tempRoot);
         await using (WebApplication app = await StartAsync(configuration, handler))
         {
+            TestDevice device = await TestDevices.RegisterAsync(app, DeviceMac);
             using IMqttClient client = new MqttClientFactory().CreateMqttClient();
-            await client.ConnectAsync(ClientOptions(configuration.MqttPort!.Value).Build());
+            await client.ConnectAsync(ClientOptions(configuration.MqttPort!.Value, device).Build());
             await client.PublishStringAsync(UplinkTopic, RegisterJson, MqttQualityOfServiceLevel.AtLeastOnce);
 
             MqttEnvelope envelope = await handler.Registered.Task.WaitAsync(Timeout);
@@ -107,8 +116,9 @@ public sealed class MqttBrokerTests
         AppConfiguration configuration = TestApp.Configuration(tempRoot);
         await using (WebApplication app = await StartAsync(configuration, handler))
         {
+            TestDevice device = await TestDevices.RegisterAsync(app, DeviceMac);
             using IMqttClient client = new MqttClientFactory().CreateMqttClient();
-            await client.ConnectAsync(ClientOptions(configuration.MqttPort!.Value).Build());
+            await client.ConnectAsync(ClientOptions(configuration.MqttPort!.Value, device).Build());
             await client.PublishStringAsync(UplinkTopic, """{"sid":"0"}""", MqttQualityOfServiceLevel.AtLeastOnce);
             // 같은 클라이언트의 QoS 1 발행은 순서대로 처리되므로, 뒤의 rg 수신으로 앞 메시지 처리 완료를 확인한다.
             await client.PublishStringAsync(UplinkTopic, RegisterJson, MqttQualityOfServiceLevel.AtLeastOnce);
@@ -130,12 +140,13 @@ public sealed class MqttBrokerTests
         AppConfiguration configuration = TestApp.Configuration(tempRoot);
         await using (WebApplication app = await StartAsync(configuration, handler))
         {
+            TestDevice device = await TestDevices.RegisterAsync(app, DeviceMac);
             // MQTTnet 클라이언트의 DisconnectAsync는 DISCONNECT를 보내 Will을 폐기하므로, 원시 TCP로 MQTT 3.1 CONNECT(Will 포함) 후 끊는다.
             using (TcpClient tcp = new TcpClient())
             {
                 await tcp.ConnectAsync(IPAddress.Loopback, configuration.MqttPort!.Value);
                 NetworkStream stream = tcp.GetStream();
-                await stream.WriteAsync(BuildMqtt31Connect("lwt-test", LwtTopic, "offline"));
+                await stream.WriteAsync(BuildMqtt31Connect(device.ClientId, LwtTopic, "offline", device.UserName, device.Password));
                 byte[] connAck = new byte[4];
                 await stream.ReadExactlyAsync(connAck).AsTask().WaitAsync(Timeout);
                 Assert.AreEqual(0x20, connAck[0]);
@@ -153,14 +164,15 @@ public sealed class MqttBrokerTests
     [TestMethod]
     public async Task UnknownOperation_LogsClientIdAndRawPayload()
     {
-        const string clientId = "unknown-op-test";
+        const string clientId = "DAWONDNS-" + DeviceMac;
         const string payload = """{"sid":"0","msg":{"o":"zz","e":[{"n":"/1/0/0","v":1}]}}""";
         RecordingHandler handler = new RecordingHandler();
         AppConfiguration configuration = TestApp.Configuration(tempRoot);
         await using (WebApplication app = await StartAsync(configuration, handler))
         {
+            TestDevice device = await TestDevices.RegisterAsync(app, DeviceMac);
             using IMqttClient client = new MqttClientFactory().CreateMqttClient();
-            await client.ConnectAsync(ClientOptions(configuration.MqttPort!.Value, clientId).Build());
+            await client.ConnectAsync(ClientOptions(configuration.MqttPort!.Value, device).Build());
             await client.PublishStringAsync(UplinkTopic, payload, MqttQualityOfServiceLevel.AtLeastOnce);
             // 같은 클라이언트의 QoS 1 발행은 순서대로 처리되므로, 뒤의 rg 수신으로 앞 메시지 처리 완료를 확인한다.
             await client.PublishStringAsync(UplinkTopic, RegisterJson, MqttQualityOfServiceLevel.AtLeastOnce);
@@ -179,7 +191,6 @@ public sealed class MqttBrokerTests
     [TestMethod]
     public async Task M130NotifyShortOperation_DispatchesToNotify()
     {
-        const string clientId = "DAWONDNS-3a0000000101";
         const string notifyTopic = "dwd.v1/DAWONDNS-M130-W-3a0000000101/iot-server/notify/json";
         const string shortPayload = """
             {
@@ -196,8 +207,9 @@ public sealed class MqttBrokerTests
         AppConfiguration configuration = TestApp.Configuration(tempRoot);
         await using (WebApplication app = await StartAsync(configuration, handler))
         {
+            TestDevice device = await TestDevices.RegisterAsync(app, "3a0000000101");
             using IMqttClient client = new MqttClientFactory().CreateMqttClient();
-            await client.ConnectAsync(ClientOptions(configuration.MqttPort!.Value, clientId).Build());
+            await client.ConnectAsync(ClientOptions(configuration.MqttPort!.Value, device).Build());
             await client.PublishStringAsync(notifyTopic, shortPayload, MqttQualityOfServiceLevel.AtLeastOnce);
             await client.PublishStringAsync(notifyTopic, notifyPayload, MqttQualityOfServiceLevel.AtLeastOnce);
             // 같은 클라이언트의 QoS 1 발행은 순서대로 처리되므로, 뒤의 rg 수신으로 앞 메시지 처리 완료를 확인한다.
@@ -224,17 +236,18 @@ public sealed class MqttBrokerTests
     [TestMethod]
     public async Task WillOnUnparsedLwtTopic_LogsClientIdAndPayload()
     {
-        const string clientId = "lwt-raw-test";
+        const string clientId = "DAWONDNS-" + DeviceMac;
         RecordingHandler handler = new RecordingHandler();
         AppConfiguration configuration = TestApp.Configuration(tempRoot);
         await using (WebApplication app = await StartAsync(configuration, handler))
         {
+            TestDevice device = await TestDevices.RegisterAsync(app, DeviceMac);
             // 실장비처럼 장치 키 없는 /lwt를 Will 토픽으로 등록하고 DISCONNECT 없이 끊는다.
             using (TcpClient tcp = new TcpClient())
             {
                 await tcp.ConnectAsync(IPAddress.Loopback, configuration.MqttPort!.Value);
                 NetworkStream stream = tcp.GetStream();
-                await stream.WriteAsync(BuildMqtt31Connect(clientId, "/lwt", "offline"));
+                await stream.WriteAsync(BuildMqtt31Connect(device.ClientId, "/lwt", "offline", device.UserName, device.Password));
                 byte[] connAck = new byte[4];
                 await stream.ReadExactlyAsync(connAck).AsTask().WaitAsync(Timeout);
                 Assert.AreEqual(0x00, connAck[3]);
@@ -247,20 +260,22 @@ public sealed class MqttBrokerTests
         Assert.IsTrue(handler.Calls.IsEmpty);
     }
 
-    // injected-message-log C2: ClientId가 서버 주입용 이름(power-manager)이어도 클라이언트가 보낸 메시지는 해석 불가 토픽 로그를 남긴다.
+    // injected-message-log C2: 클라이언트가 서버 → 장치 토픽에 보낸 메시지는 서버 주입으로 보지 않고 해석 불가 토픽 로그를 남긴다.
+    // (ClientId가 power-manager인 클라이언트는 이제 접속 인증에서 거부되므로 등록 장치로 확인한다. mqtt-connect-auth)
     [TestMethod]
-    public async Task ClientNamedPowerManager_PublishToDownlink_LogsUnparsedTopic()
+    public async Task ClientPublishToDownlink_LogsUnparsedTopic()
     {
         const string downlinkTopic = "dwd.v1/iot-server/" + DeviceKey;
         RecordingHandler handler = new RecordingHandler();
         AppConfiguration configuration = TestApp.Configuration(tempRoot);
         await using (WebApplication app = await StartAsync(configuration, handler))
         {
+            TestDevice device = await TestDevices.RegisterAsync(app, DeviceMac);
             using IMqttClient client = new MqttClientFactory().CreateMqttClient();
-            await client.ConnectAsync(ClientOptions(configuration.MqttPort!.Value, "power-manager").Build());
+            await client.ConnectAsync(ClientOptions(configuration.MqttPort!.Value, device).Build());
             await client.PublishStringAsync(downlinkTopic, "hello", MqttQualityOfServiceLevel.AtLeastOnce);
 
-            await WaitForLogAsync($"Unparsed topic passed through: \"{downlinkTopic}\", clientId=\"power-manager\", bytes=5, truncated=False, payload=hello");
+            await WaitForLogAsync($"Unparsed topic passed through: \"{downlinkTopic}\", clientId=\"{device.ClientId}\", bytes=5, truncated=False, payload=hello");
             await client.DisconnectAsync();
             await app.StopAsync();
         }
@@ -274,8 +289,9 @@ public sealed class MqttBrokerTests
         AppConfiguration configuration = TestApp.Configuration(tempRoot);
         await using (WebApplication app = await StartAsync(configuration, handler))
         {
+            TestDevice device = await TestDevices.RegisterAsync(app, DeviceMac);
             using IMqttClient client = new MqttClientFactory().CreateMqttClient();
-            await client.ConnectAsync(ClientOptions(configuration.MqttPort!.Value).Build());
+            await client.ConnectAsync(ClientOptions(configuration.MqttPort!.Value, device).Build());
             await client.PublishStringAsync("test/large", new string('a', 5000), MqttQualityOfServiceLevel.AtLeastOnce);
 
             await WaitForLogAsync("Unparsed topic passed through: \"test/large\"");
@@ -299,8 +315,9 @@ public sealed class MqttBrokerTests
         await using (WebApplication app = await StartAsync(configuration, handler))
         {
             ushort port = configuration.MqttsPort!.Value;
+            TestDevice device = await TestDevices.RegisterAsync(app, DeviceMac);
             using IMqttClient client = new MqttClientFactory().CreateMqttClient();
-            await client.ConnectAsync(ClientOptions(port).WithTlsOptions(tls => tls
+            await client.ConnectAsync(ClientOptions(port, device).WithTlsOptions(tls => tls
                 .UseTls()
                 .WithSslProtocols(SslProtocols.Tls12)
                 .WithTargetHost("localhost")
@@ -321,9 +338,10 @@ public sealed class MqttBrokerTests
         CollectionAssert.AreEqual(new[] { "rg" }, handler.Calls.ToArray());
     }
 
-    // C8: 접속마다 자격 증명 판정을 관찰 로그로 남기고, 접속은 모두 받는다. 비밀번호 값은 남기지 않는다.
+    // mqtt-connect-auth C1·C2·C3·C6: 등록 장치가 발급 키로 접속할 때(Match)만 받고, Mismatch·Unknown은 반환 코드 4로 거부한다.
+    // 거부한 접속에도 판정 로그가 하나씩 남고, 비밀번호 값은 남지 않는다.
     [TestMethod]
-    public async Task ValidatingConnection_LogsPasswordCheckAndAcceptsAll()
+    public async Task ValidatingConnection_AcceptsOnlyRegisteredDeviceWithMatchingKey()
     {
         RecordingHandler handler = new RecordingHandler();
         AppConfiguration configuration = TestApp.Configuration(tempRoot);
@@ -331,34 +349,101 @@ public sealed class MqttBrokerTests
         string mqttKey;
         await using (WebApplication app = await StartAsync(configuration, handler))
         {
-            mqttKey = (await app.Services.GetRequiredService<DeviceRegistrationService>()
-                .RegisterAsync("aabbccddeeff", "user@example.com/kakao", "B540_W", "DAWONDNS", CancellationToken.None)).MqttKey;
+            mqttKey = (await TestDevices.RegisterAsync(app, "aabbccddeeff")).Password;
+            ushort port = configuration.MqttPort!.Value;
 
-            (string ClientId, string? UserName, string? Password, string Expected)[] cases =
+            (string ClientId, string? UserName, string? Password, MqttProtocolVersion Version, MqttClientConnectResultCode Result, string Expected)[] cases =
             [
-                ("DAWONDNS-AABBCCDDEEFF", DeviceKey, mqttKey, "hasPassword=True, passwordCheck=\"Match\""),
-                ("DAWONDNS-aabbccddeeff", DeviceKey, wrongPassword, "hasPassword=True, passwordCheck=\"Mismatch\""),
-                ("DAWONDNS-aabbccddeeff", DeviceKey, null, "hasPassword=False, passwordCheck=\"Mismatch\""),
-                ("DAWONDNS-112233445566", "DAWONDNS-B540_W-112233445566", mqttKey, "hasPassword=True, passwordCheck=\"Unknown\""),
-                ("client-not-device", null, null, "hasPassword=False, passwordCheck=\"Unknown\""),
+                ("DAWONDNS-AABBCCDDEEFF", DeviceKey, mqttKey, MqttProtocolVersion.V310, MqttClientConnectResultCode.Success,
+                    "hasPassword=True, passwordCheck=\"Match\""),
+                ("DAWONDNS-aabbccddeeff", DeviceKey, wrongPassword, MqttProtocolVersion.V310, MqttClientConnectResultCode.BadUserNameOrPassword,
+                    "hasPassword=True, passwordCheck=\"Mismatch\""),
+                ("DAWONDNS-aabbccddeeff", DeviceKey, null, MqttProtocolVersion.V310, MqttClientConnectResultCode.BadUserNameOrPassword,
+                    "hasPassword=False, passwordCheck=\"Mismatch\""),
+                ("DAWONDNS-aabbccddeeff", DeviceKey, wrongPassword, MqttProtocolVersion.V311, MqttClientConnectResultCode.BadUserNameOrPassword,
+                    "hasPassword=True, passwordCheck=\"Mismatch\""),
+                ("DAWONDNS-112233445566", "DAWONDNS-B540_W-112233445566", mqttKey, MqttProtocolVersion.V310, MqttClientConnectResultCode.BadUserNameOrPassword,
+                    "hasPassword=True, passwordCheck=\"Unknown\""),
+                ("DAWONDNS-112233445566", "DAWONDNS-B540_W-112233445566", mqttKey, MqttProtocolVersion.V311, MqttClientConnectResultCode.BadUserNameOrPassword,
+                    "hasPassword=True, passwordCheck=\"Unknown\""),
+                ("client-not-device", null, null, MqttProtocolVersion.V310, MqttClientConnectResultCode.BadUserNameOrPassword,
+                    "hasPassword=False, passwordCheck=\"Unknown\""),
+                ("power-manager", null, null, MqttProtocolVersion.V310, MqttClientConnectResultCode.BadUserNameOrPassword,
+                    "hasPassword=False, passwordCheck=\"Unknown\""),
             ];
-            foreach ((string clientId, string? userName, string? password, string expected) in cases)
+            foreach ((string clientId, string? userName, string? password, MqttProtocolVersion version, MqttClientConnectResultCode expectedResult, string expected) in cases)
             {
-                MqttClientOptionsBuilder options = ClientOptions(configuration.MqttPort!.Value, clientId);
+                MqttClientOptionsBuilder options = ClientOptions(port, clientId).WithProtocolVersion(version);
                 if (userName is not null)
                     options = password is null ? options.WithCredentials(userName) : options.WithCredentials(userName, password);
                 using IMqttClient client = new MqttClientFactory().CreateMqttClient();
-                MqttClientConnectResult result = await client.ConnectAsync(options.Build());
-                Assert.AreEqual(MqttClientConnectResultCode.Success, result.ResultCode, clientId);
+                Assert.AreEqual(expectedResult, await ConnectResultAsync(client, options.Build()), $"{clientId} {version}");
                 await WaitForLogAsync($"MQTT client connecting: clientId=\"{clientId}\", userName={(userName is null ? "null" : $"\"{userName}\"")}, {expected}");
-                await client.DisconnectAsync();
+                if (client.IsConnected)
+                    await client.DisconnectAsync();
             }
+
+            // MQTT 3.1 장치가 실제로 받는 CONNACK 반환 코드(넷째 바이트).
+            Assert.AreEqual(0x04, await RawConnAckCodeAsync(port, BuildMqtt31Connect("DAWONDNS-aabbccddeeff", null, null, DeviceKey, wrongPassword)), "틀린 비밀번호");
+            Assert.AreEqual(0x04, await RawConnAckCodeAsync(port,
+                BuildMqtt31Connect("DAWONDNS-112233445566", null, null, "DAWONDNS-B540_W-112233445566", mqttKey)), "미등록 mac");
+            Assert.AreEqual(0x00, await RawConnAckCodeAsync(port, BuildMqtt31Connect("DAWONDNS-aabbccddeeff", null, null, DeviceKey, mqttKey)), "Match");
             await app.StopAsync();
         }
 
         string log = ReadLogs();
         Assert.IsFalse(log.Contains(mqttKey, StringComparison.Ordinal), "로그에 mqtt_key가 있다");
         Assert.IsFalse(log.Contains(wrongPassword, StringComparison.Ordinal), "로그에 비밀번호가 있다");
+    }
+
+    // mqtt-connect-auth C4·C6: 접속 확인 중 예외(등록 조회 실패)가 나면 Error 로그를 남기고 반환 코드 3으로 거부하며, 판정은 Unknown이다.
+    [TestMethod]
+    public async Task ValidatingConnection_CheckFails_RejectsWithServerUnavailable()
+    {
+        RecordingHandler handler = new RecordingHandler();
+        AppConfiguration configuration = TestApp.Configuration(tempRoot);
+        TestDevice device;
+        await using (WebApplication app = await StartAsync(configuration, handler))
+        {
+            device = await TestDevices.RegisterAsync(app, "aabbccddeeff");
+            ushort port = configuration.MqttPort!.Value;
+            await using (PowerManagerDbContext db = await app.Services.GetRequiredService<IDbContextFactory<PowerManagerDbContext>>().CreateDbContextAsync())
+                await db.Database.ExecuteSqlRawAsync("DROP TABLE Devices");
+
+            foreach (MqttProtocolVersion version in new[] { MqttProtocolVersion.V310, MqttProtocolVersion.V311 })
+            {
+                using IMqttClient client = new MqttClientFactory().CreateMqttClient();
+                MqttClientOptions options = ClientOptions(port).WithProtocolVersion(version).WithDevice(device).Build();
+                Assert.AreEqual(MqttClientConnectResultCode.ServerUnavailable, await ConnectResultAsync(client, options), version.ToString());
+            }
+            Assert.AreEqual(0x03, await RawConnAckCodeAsync(port, BuildMqtt31Connect(device.ClientId, null, null, device.UserName, device.Password)));
+
+            await WaitForLogAsync("MQTT connection credential check failed");
+            await WaitForLogAsync($"MQTT client connecting: clientId=\"{device.ClientId}\", userName=\"{device.UserName}\", hasPassword=True, passwordCheck=\"Unknown\"");
+            await app.StopAsync();
+        }
+        Assert.IsFalse(ReadLogs().Contains(device.Password, StringComparison.Ordinal), "로그에 mqtt_key가 있다");
+    }
+
+    /// <summary>
+    /// 접속 결과 코드. MQTTnet 5는 서버가 거부해도 예외 없이 그 결과 코드를 돌려준다.
+    /// </summary>
+    private static async Task<MqttClientConnectResultCode> ConnectResultAsync(IMqttClient client, MqttClientOptions options)
+        => (await client.ConnectAsync(options)).ResultCode;
+
+    /// <summary>
+    /// 원시 TCP로 CONNECT를 보내고 CONNACK의 반환 코드(넷째 바이트)를 돌려준다.
+    /// </summary>
+    private static async Task<byte> RawConnAckCodeAsync(ushort port, byte[] connect)
+    {
+        using TcpClient tcp = new TcpClient();
+        await tcp.ConnectAsync(IPAddress.Loopback, port);
+        NetworkStream stream = tcp.GetStream();
+        await stream.WriteAsync(connect);
+        byte[] connAck = new byte[4];
+        await stream.ReadExactlyAsync(connAck).AsTask().WaitAsync(Timeout);
+        Assert.AreEqual(0x20, connAck[0], "CONNACK");
+        return connAck[3];
     }
 
     private string ReadLogs()
@@ -386,18 +471,36 @@ public sealed class MqttBrokerTests
         Assert.Fail($"로그에 기대 문자열이 없다: {expected}{Environment.NewLine}{ReadLogs()}");
     }
 
-    /// <summary>MQTT 3.1(MQIsdp, level 3) CONNECT 패킷. clean session + Will(QoS 0, retain 없음), keepalive 60초.</summary>
-    private static byte[] BuildMqtt31Connect(string clientId, string willTopic, string willMessage)
+    /// <summary>
+    /// MQTT 3.1(MQIsdp, level 3) CONNECT 패킷. clean session, keepalive 60초.
+    /// <paramref name="willTopic"/>이 있으면 Will(QoS 0, retain 없음), 사용자명·비밀번호가 있으면 그 플래그와 값을 넣는다.
+    /// </summary>
+    private static byte[] BuildMqtt31Connect(string clientId, string? willTopic, string? willMessage, string? userName, string? password)
     {
+        byte flags = 0x02;                 // clean session
+        if (willTopic is not null)
+            flags |= 0x04;                 // will
+        if (userName is not null)
+            flags |= 0x80;                 // user name
+        if (password is not null)
+            flags |= 0x40;                 // password
+
         List<byte> body = [];
         AddString(body, "MQIsdp");
         body.Add(3);       // protocol level
-        body.Add(0x06);    // flags: will + clean session
+        body.Add(flags);
         body.Add(0);
         body.Add(60);      // keepalive
         AddString(body, clientId);
-        AddString(body, willTopic);
-        AddString(body, willMessage);
+        if (willTopic is not null)
+        {
+            AddString(body, willTopic);
+            AddString(body, willMessage ?? string.Empty);
+        }
+        if (userName is not null)
+            AddString(body, userName);
+        if (password is not null)
+            AddString(body, password);
 
         List<byte> packet = [0x10];
         int length = body.Count;

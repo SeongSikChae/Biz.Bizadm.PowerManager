@@ -23,6 +23,9 @@ public sealed class TimeSyncResponseTests
     private const string DownlinkTopic = "dwd.v1/iot-server/" + DeviceKey;
     private const string DownlinkFilter = DownlinkTopic + "/#";
     private const string MarkerTopic = DownlinkTopic + "/marker";
+    private const string DeviceClientId = "DAWONDNS-3a0000000201";
+    private const string Subscriber = "DAWONDNS-3a0000000211";
+    private const string LateSubscriber = "DAWONDNS-3a0000000212";
     private static readonly TimeSpan Timeout = TimeSpan.FromSeconds(10);
 
     // 소수 초(0.750)가 있는 시각. epoch 초는 버림으로 1795147200(2026-11-20T04:00:00Z)이다.
@@ -80,13 +83,19 @@ public sealed class TimeSyncResponseTests
         => TestApp.StartAsync(configuration, Path.Combine(tempRoot, "log"),
             builder => builder.Services.Replace(ServiceDescriptor.Singleton<TimeProvider>(new FixedTime(FixedNow))));
 
-    private static MqttClientOptions ClientOptions(AppConfiguration configuration, string clientId)
-        => new MqttClientOptionsBuilder()
+    /// <summary>
+    /// ClientId(<c>DAWONDNS-{mac}</c>)의 mac을 등록하고 그 발급 키로 접속하는 옵션을 만든다(브로커는 등록 장치 접속만 받는다, mqtt-connect-auth).
+    /// </summary>
+    private static async Task<MqttClientOptions> ClientOptionsAsync(WebApplication app, AppConfiguration configuration, string clientId)
+    {
+        TestDevice device = await TestDevices.RegisterAsync(app, clientId["DAWONDNS-".Length..]);
+        return new MqttClientOptionsBuilder()
             .WithTcpServer("127.0.0.1", configuration.MqttPort!.Value)
-            .WithClientId(clientId)
+            .WithDevice(device)
             .WithProtocolVersion(MqttProtocolVersion.V310)
             .WithTimeout(Timeout)
             .Build();
+    }
 
     private static async Task WaitUntilAsync(Func<bool> condition, string message)
     {
@@ -131,15 +140,15 @@ public sealed class TimeSyncResponseTests
     /// <summary>
     /// 장치가 tisyn을 보내면 와일드카드로 구독한 클라이언트가 받은 응답 하나(표시 메시지 제외)를 돌려준다.
     /// </summary>
-    private static async Task<List<MqttApplicationMessage>> SendTimeSyncAsync(AppConfiguration configuration, string requestPayload)
+    private static async Task<List<MqttApplicationMessage>> SendTimeSyncAsync(WebApplication app, AppConfiguration configuration, string requestPayload)
     {
         Receiver receiver = new Receiver();
         using IMqttClient subscriber = receiver.Attach(new MqttClientFactory().CreateMqttClient());
-        await subscriber.ConnectAsync(ClientOptions(configuration, "subscriber"));
+        await subscriber.ConnectAsync(await ClientOptionsAsync(app, configuration, Subscriber));
         await subscriber.SubscribeAsync(DownlinkFilter, MqttQualityOfServiceLevel.AtLeastOnce);
 
         using IMqttClient device = new MqttClientFactory().CreateMqttClient();
-        await device.ConnectAsync(ClientOptions(configuration, "DAWONDNS-3a0000000201"));
+        await device.ConnectAsync(await ClientOptionsAsync(app, configuration, DeviceClientId));
         await device.PublishStringAsync(TimeSyncTopic, requestPayload, MqttQualityOfServiceLevel.AtLeastOnce);
 
         await WaitUntilAsync(() => receiver.Messages.Any(m => m.Topic == DownlinkTopic), "시간 동기 응답이 오지 않았다.");
@@ -158,7 +167,7 @@ public sealed class TimeSyncResponseTests
         List<MqttApplicationMessage> messages;
         await using (WebApplication app = await StartAsync(configuration))
         {
-            messages = await SendTimeSyncAsync(configuration, """{"sid":"7","msg":{"o":"tisyn","e":[]}}""");
+            messages = await SendTimeSyncAsync(app, configuration, """{"sid":"7","msg":{"o":"tisyn","e":[]}}""");
             await app.StopAsync();
         }
 
@@ -181,7 +190,7 @@ public sealed class TimeSyncResponseTests
         List<MqttApplicationMessage> messages;
         await using (WebApplication app = await StartAsync(configuration))
         {
-            messages = await SendTimeSyncAsync(configuration, """{"msg":{"o":"tisyn","e":[]}}""");
+            messages = await SendTimeSyncAsync(app, configuration, """{"msg":{"o":"tisyn","e":[]}}""");
             await app.StopAsync();
         }
 
@@ -194,11 +203,11 @@ public sealed class TimeSyncResponseTests
     {
         AppConfiguration configuration = TestApp.Configuration(tempRoot);
         await using WebApplication app = await StartAsync(configuration);
-        await SendTimeSyncAsync(configuration, """{"sid":"0","msg":{"o":"tisyn","e":[]}}""");
+        await SendTimeSyncAsync(app, configuration, """{"sid":"0","msg":{"o":"tisyn","e":[]}}""");
 
         Receiver late = new Receiver();
         using IMqttClient client = late.Attach(new MqttClientFactory().CreateMqttClient());
-        await client.ConnectAsync(ClientOptions(configuration, "late-subscriber"));
+        await client.ConnectAsync(await ClientOptionsAsync(app, configuration, LateSubscriber));
         await client.SubscribeAsync(DownlinkFilter, MqttQualityOfServiceLevel.AtLeastOnce);
         // retained 메시지는 구독 직후 큐에 들어가므로, 뒤에 보낸 표시 메시지를 받으면 retained 여부가 정해진다.
         await FlushAsync(client, late, "late-marker");
@@ -225,11 +234,11 @@ public sealed class TimeSyncResponseTests
     {
         AppConfiguration configuration = TestApp.Configuration(tempRoot);
         await using WebApplication app = await StartAsync(configuration);
-        List<MqttApplicationMessage> messages = await SendTimeSyncAsync(configuration, """{"sid":"5","msg":{"o":"tisyn","e":[]}}""");
+        List<MqttApplicationMessage> messages = await SendTimeSyncAsync(app, configuration, """{"sid":"5","msg":{"o":"tisyn","e":[]}}""");
         Assert.AreEqual(DownlinkTopic, messages.Single().Topic);
 
         await WaitForLogsAsync(
-            $"Downlink message enqueued: sender=\"power-manager\", receiver=\"subscriber\", topic=\"{DownlinkTopic}\"",
+            $"Downlink message enqueued: sender=\"power-manager\", receiver=\"{Subscriber}\", topic=\"{DownlinkTopic}\"",
             ResponseSentLine);
         Assert.IsFalse(ReadLogs().Contains(UnparsedDownlinkLine, StringComparison.Ordinal), "주입 응답이 해석 불가 토픽 로그로 남았다.");
         await app.StopAsync();
@@ -243,7 +252,7 @@ public sealed class TimeSyncResponseTests
         await using WebApplication app = await StartAsync(configuration);
         using (IMqttClient device = new MqttClientFactory().CreateMqttClient())
         {
-            await device.ConnectAsync(ClientOptions(configuration, "DAWONDNS-3a0000000201"));
+            await device.ConnectAsync(await ClientOptionsAsync(app, configuration, DeviceClientId));
             await device.PublishStringAsync(TimeSyncTopic, """{"sid":"6","msg":{"o":"tisyn","e":[]}}""", MqttQualityOfServiceLevel.AtLeastOnce);
 
             await WaitForLogsAsync(
