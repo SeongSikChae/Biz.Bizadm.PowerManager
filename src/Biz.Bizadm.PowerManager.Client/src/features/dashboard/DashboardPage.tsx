@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useGetStatusesQuery } from "@/features/device-status/deviceStatusApi";
-import { describeApiError, formatSummary, sortByMac } from "@/features/device-status/format";
+import { describeApiError, formatSummary, sortByName } from "@/features/device-status/format";
 import { useNow } from "@/features/device-status/useDeviceStatusStream";
 import { DeviceCard } from "./DeviceCard";
 
@@ -36,7 +36,7 @@ export function DashboardPage({ getNow = Date.now }: { getNow?: () => number }) 
   const { devices, received, connection } = useAppSelector((state) => state.deviceStatus);
   const { error, isFetching, refetch } = useGetStatusesQuery();
   const now = useNow(getNow);
-  const cards = sortByMac(devices);
+  const cards = sortByName(devices);
 
   return (
     <>

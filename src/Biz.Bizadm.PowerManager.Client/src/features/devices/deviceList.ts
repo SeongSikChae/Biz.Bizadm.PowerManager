@@ -60,7 +60,7 @@ export function sortDevices(devices: readonly Device[], sort: Sort): Device[] {
 }
 
 /**
- * MAC·모델·사용자 부분 일치(대소문자 무시). MAC은 검색어와 값 모두에서 `:`·`-`를 지우고 비교한다.
+ * 장비명·MAC·모델·사용자 부분 일치(대소문자 무시). MAC은 검색어와 값 모두에서 `:`·`-`를 지우고 비교한다.
  * 공백뿐인 검색어는 전체를 돌려준다.
  */
 export function filterDevices(devices: readonly Device[], query: string): Device[] {
@@ -70,6 +70,7 @@ export function filterDevices(devices: readonly Device[], query: string): Device
   return devices.filter(
     (d) =>
       (macQuery !== "" && d.mac.toLowerCase().replace(/[:-]/g, "").includes(macQuery)) ||
+      d.name.toLowerCase().includes(q) ||
       d.modelId.toLowerCase().includes(q) ||
       d.userId.toLowerCase().includes(q),
   );

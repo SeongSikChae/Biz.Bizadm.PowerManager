@@ -17,7 +17,7 @@ public sealed class DeviceStatusApiTests
     private const string StatusPath = "/api/admin/devices/status";
     private const string StreamPath = "/api/admin/devices/status/stream";
     private static readonly string[] ExpectedFields =
-        ["mac", "modelId", "online", "relay", "voltage", "current", "powerFactor", "power", "lastReportAt", "controllable"];
+        ["mac", "name", "modelId", "online", "relay", "voltage", "current", "powerFactor", "power", "lastReportAt", "controllable"];
 
     private string tempRoot = null!;
     private AppConfiguration configuration = null!;
@@ -207,6 +207,36 @@ public sealed class DeviceStatusApiTests
         await device.DisposeAsync();
         await stream.ReadDeviceAsync(d => !d.GetProperty("online").GetBoolean());
         await app.StopAsync();
+    }
+
+    // device-name-and-units C13: 장비명이 바뀌면 그 장비의 원소를 보내고, 같은 값으로 저장하면 보내지 않는다.
+    [TestMethod]
+    public async Task Stream_NameChanged_SendsDeviceOnlyWhenDifferent()
+    {
+        const string Other = "3a0000000609";
+        await using WebApplication app = await StartAsync();
+        await TestDevices.RegisterAsync(app, Mac);
+        await TestDevices.RegisterAsync(app, Other);
+        using StreamReaderClient stream = await StreamReaderClient.OpenAsync(app);
+        await stream.ReadAsync();
+
+        await RenameAsync(app, Mac, "거실");
+        (string Event, JsonElement Data)? changed = await stream.ReadAsync();
+        Assert.AreEqual("device", changed!.Value.Event);
+        Assert.AreEqual(Mac, changed.Value.Data.GetProperty("mac").GetString());
+        Assert.AreEqual("거실", changed.Value.Data.GetProperty("name").GetString());
+
+        await RenameAsync(app, Mac, " 거실 ");
+        await RenameAsync(app, Other, "서재");
+        (string Event, JsonElement Data)? next = await stream.ReadAsync();
+        Assert.AreEqual(Other, next!.Value.Data.GetProperty("mac").GetString());
+        await app.StopAsync();
+    }
+
+    private static async Task RenameAsync(WebApplication app, string mac, string name)
+    {
+        (int status, _, string body) = await TestMqtt.SendHttpAsync(app, 80, "PUT", $"/api/admin/devices/{mac}/name", JsonSerializer.Serialize(new { name }));
+        Assert.AreEqual(204, status, body);
     }
 
     // C5: 클라이언트가 연결을 끊으면 구독이 풀린다.

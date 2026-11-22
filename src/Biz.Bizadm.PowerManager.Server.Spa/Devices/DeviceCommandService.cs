@@ -18,6 +18,8 @@ namespace Biz.Bizadm.PowerManager.Server.Spa.Devices
 
         public static DeviceCommandResult OutOfRange { get; } = new DeviceCommandResult(StatusCodes.Status400BadRequest, "Value out of range");
 
+        public static DeviceCommandResult InvalidName { get; } = new DeviceCommandResult(StatusCodes.Status400BadRequest, "Invalid device name");
+
         public static DeviceCommandResult UnsupportedModel { get; } = new DeviceCommandResult(StatusCodes.Status400BadRequest, "Unsupported model");
 
         public static DeviceCommandResult NotControllable { get; } = new DeviceCommandResult(StatusCodes.Status409Conflict, "Device not controllable");

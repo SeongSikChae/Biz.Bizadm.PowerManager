@@ -1,3 +1,4 @@
+using Biz.Bizadm.PowerManager.Server.Spa.Devices;
 using Microsoft.EntityFrameworkCore;
 
 namespace Biz.Bizadm.PowerManager.Server.Spa.Data
@@ -16,6 +17,7 @@ namespace Biz.Bizadm.PowerManager.Server.Spa.Data
                 entity.Property(e => e.UserId).IsRequired();
                 entity.Property(e => e.ModelId).IsRequired();
                 entity.Property(e => e.Company).IsRequired();
+                entity.Property(e => e.Name).HasMaxLength(DeviceName.MaxLength).IsRequired();
                 entity.Property(e => e.MqttKey).HasMaxLength(32).IsRequired();
                 // SQLite는 DateTimeOffset 정렬·비교를 지원하지 않으므로 UTC ticks로 저장한다.
                 entity.Property(e => e.RegisteredAt).HasConversion(v => v.UtcTicks, v => new DateTimeOffset(v, TimeSpan.Zero));

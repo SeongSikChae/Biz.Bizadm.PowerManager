@@ -3,6 +3,8 @@ export type Relay = "on" | "off" | "unknown";
 /** 서버 `GET /api/admin/devices/status`와 상태 스트림의 원소. `lastReportAt`은 ISO 8601 문자열이다. */
 export interface DeviceStatus {
   mac: string;
+  /** 사용자가 정한 장비명. 없으면 빈 문자열. */
+  name: string;
   modelId: string;
   online: boolean;
   relay: Relay;

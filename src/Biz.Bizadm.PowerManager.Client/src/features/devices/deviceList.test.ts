@@ -16,6 +16,7 @@ import {
 function device(mac: string, lastRequestedAt: string, overrides: Partial<Device> = {}): Device {
   return {
     mac,
+    name: "",
     userId: "user-01",
     modelId: "M130-W",
     company: "DAWONDNS",
@@ -111,7 +112,7 @@ describe("정렬", () => {
 describe("filterDevices", () => {
   const devices = [
     device("3a0000000101", "2026-11-19T05:00:00+00:00", { modelId: "M130-W", userId: "Alice" }),
-    device("5e0000000201", "2026-11-19T05:00:00+00:00", { modelId: "B540", userId: "bob" }),
+    device("5e0000000201", "2026-11-19T05:00:00+00:00", { modelId: "B540", userId: "bob", name: "거실 Lamp" }),
   ];
   const macs = (q: string) => filterDevices(devices, q).map((d) => d.mac);
 
@@ -130,6 +131,11 @@ describe("filterDevices", () => {
     expect(macs("b540")).toEqual(["5e0000000201"]);
     expect(macs("m130")).toEqual(["3a0000000101"]);
     expect(macs("ALI")).toEqual(["3a0000000101"]);
+  });
+
+  it("장비명 부분 일치, 대소문자 무시", () => {
+    expect(macs("거실")).toEqual(["5e0000000201"]);
+    expect(macs("LAMP")).toEqual(["5e0000000201"]);
   });
 
   it("구분자만 있는 검색어는 MAC으로 맞추지 않는다", () => {

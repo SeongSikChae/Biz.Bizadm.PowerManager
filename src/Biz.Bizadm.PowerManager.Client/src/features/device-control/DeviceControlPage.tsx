@@ -5,11 +5,12 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { OnlineStatus } from "@/features/dashboard/DeviceCard";
+import { DeviceSubtitle } from "@/features/device-status/DeviceLabel";
 import { useGetSettingsQuery, useGetStatusesQuery } from "@/features/device-status/deviceStatusApi";
-import { describeApiError, formatLastReport, formatPower, uncontrollableReason } from "@/features/device-status/format";
+import { describeApiError, displayName, formatLastReport, formatPower, uncontrollableReason } from "@/features/device-status/format";
 import type { DeviceStatus } from "@/features/device-status/types";
 import { useNow } from "@/features/device-status/useDeviceStatusStream";
-import { displayValue } from "@/features/devices/deviceList";
+import { DeviceNameDialog } from "./DeviceNameDialog";
 import { PowerSection } from "./PowerSection";
 import { ReportConditionForm } from "./ReportConditionForm";
 import { ScheduleForm } from "./ScheduleForm";
@@ -33,14 +34,24 @@ function DashboardLink() {
   );
 }
 
-function LoadError({ title, message, onRetry }: { title: string; message: string; onRetry: () => void }) {
+function LoadError({
+  title,
+  message,
+  retrying = false,
+  onRetry,
+}: {
+  title: string;
+  message: string;
+  retrying?: boolean;
+  onRetry: () => void;
+}) {
   return (
     <Alert variant="destructive" className="py-6">
       <CircleAlert aria-hidden="true" />
       <AlertTitle>{title}</AlertTitle>
       <AlertDescription className="flex flex-col items-start gap-3">
         <span>{message}</span>
-        <Button variant="outline" onClick={onRetry}>
+        <Button variant="outline" disabled={retrying} onClick={onRetry}>
           다시 시도
         </Button>
       </AlertDescription>
@@ -48,47 +59,37 @@ function LoadError({ title, message, onRetry }: { title: string; message: string
   );
 }
 
-function LoadSkeleton({ label }: { label: string }) {
+function LoadSkeleton() {
   return (
-    <div role="status" aria-label={label} className={COLUMNS}>
+    <div role="status" aria-label="장비 상태를 불러오는 중" className={COLUMNS}>
       <Skeleton className="h-48 w-full" />
       <Skeleton className="h-48 w-full" />
     </div>
   );
 }
 
-/** 설정 묶음 셋. 서버가 마지막으로 보낸 값을 받은 뒤 그 값으로 채운다. */
-function SettingsSections({ device }: { device: DeviceStatus }) {
-  const { data, error, isFetching, refetch } = useGetSettingsQuery(device.mac, { refetchOnMountOrArgChange: true });
-  if (isFetching) return <LoadSkeleton label="설정을 불러오는 중" />;
-  if (data === undefined) {
-    return (
-      <LoadError
-        title="설정을 불러오지 못했습니다"
-        message={error === undefined ? "알 수 없는 오류" : describeApiError(error)}
-        onRetry={() => void refetch()}
-      />
-    );
-  }
-  return (
-    <>
-      <ReportConditionForm device={device} initial={data.reportCondition} note={SETTINGS_NOTE} />
-      <StandbyCutoffForm device={device} initial={data.standbyCutoff} note={SETTINGS_NOTE} />
-      <ScheduleForm device={device} initial={data.schedule} note={SETTINGS_NOTE} />
-    </>
-  );
-}
-
+/**
+ * 장비 한 대의 머리와 네 묶음. 묶음은 설정 응답과 관계없이 바로 그리고, 설정 묶음은 응답이 오면 그 값으로 채운다.
+ * 오류 판정은 `error`로 한다: 다시 읽는 동안에도 성공할 때까지 남는다.
+ */
 function DeviceControl({ device, now }: { device: DeviceStatus; now: number }) {
+  const { data, error, isFetching, refetch } = useGetSettingsQuery(device.mac, { refetchOnMountOrArgChange: true });
+  const ready = data !== undefined && !isFetching;
   const reason = uncontrollableReason(device);
+  const settings = { device, ready, loading: isFetching, note: SETTINGS_NOTE };
   return (
     <>
       <header className="flex w-full max-w-[70rem] flex-col gap-3">
         <DashboardLink />
         <div className="flex flex-wrap items-end justify-between gap-4">
-          <div className="flex flex-col gap-1">
-            <h1 className="text-2xl font-semibold tracking-tight">{displayValue(device.modelId)}</h1>
-            <p className="font-mono text-muted-foreground">{device.mac}</p>
+          <div className="flex min-w-0 flex-col gap-1">
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+              <h1 className="min-w-0 text-2xl font-semibold tracking-tight wrap-anywhere">{displayName(device)}</h1>
+              <DeviceNameDialog device={device} />
+            </div>
+            <p className="wrap-anywhere text-muted-foreground">
+              <DeviceSubtitle device={device} />
+            </p>
           </div>
           <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
             <OnlineStatus online={device.online} />
@@ -103,9 +104,21 @@ function DeviceControl({ device, now }: { device: DeviceStatus; now: number }) {
           <AlertTitle>{reason}</AlertTitle>
         </Alert>
       )}
+      {!ready && error !== undefined && (
+        <div className="w-full max-w-[70rem]">
+          <LoadError
+            title="설정을 불러오지 못했습니다"
+            message={describeApiError(error)}
+            retrying={isFetching}
+            onRetry={() => void refetch()}
+          />
+        </div>
+      )}
       <div className={COLUMNS}>
         <PowerSection device={device} />
-        <SettingsSections device={device} />
+        <ReportConditionForm {...settings} initial={data?.reportCondition ?? null} />
+        <StandbyCutoffForm {...settings} initial={data?.standbyCutoff ?? null} />
+        <ScheduleForm {...settings} initial={data?.schedule ?? null} />
       </div>
     </>
   );
@@ -139,7 +152,7 @@ export function DeviceControlPage({ getNow = Date.now }: { getNow?: () => number
       {error !== undefined && !isFetching ? (
         <LoadError title="장비 상태를 불러오지 못했습니다" message={describeApiError(error)} onRetry={() => void refetch()} />
       ) : (
-        <LoadSkeleton label="장비 상태를 불러오는 중" />
+        <LoadSkeleton />
       )}
     </>
   );

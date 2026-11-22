@@ -3,6 +3,8 @@ import { createApi, fetchBaseQuery } from "@reduxjs/toolkit/query/react";
 /** 서버 `GET /api/admin/devices`의 원소. 시각은 오프셋이 붙은 ISO 8601 문자열이다. */
 export interface Device {
   mac: string;
+  /** 사용자가 정한 장비명. 없으면 빈 문자열. */
+  name: string;
   userId: string;
   modelId: string;
   company: string;

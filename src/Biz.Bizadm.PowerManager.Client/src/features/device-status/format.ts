@@ -26,13 +26,19 @@ export function formatSummary(devices: readonly DeviceStatus[]): string {
   return `온라인 ${online.length}대 · 오프라인 ${devices.length - online.length}대 · 합계 ${total.toFixed(1)} W`;
 }
 
-export function sortByMac(devices: Record<string, DeviceStatus>): DeviceStatus[] {
-  return Object.values(devices).sort((a, b) => (a.mac < b.mac ? -1 : a.mac > b.mac ? 1 : 0));
+const nameCollator = new Intl.Collator("ko", { numeric: true });
+
+/** 장비명 순서(이름 안의 숫자는 수로 비교). 장비명이 없는 장비는 뒤에 두고, 같으면 mac 오름차순이다. */
+export function sortByName(devices: Record<string, DeviceStatus>): DeviceStatus[] {
+  return Object.values(devices).sort((a, b) => {
+    if ((a.name === "") !== (b.name === "")) return a.name === "" ? 1 : -1;
+    return nameCollator.compare(a.name, b.name) || (a.mac < b.mac ? -1 : a.mac > b.mac ? 1 : 0);
+  });
 }
 
-/** 확인 창 등에서 장비를 밝히는 "모델 (mac)". */
-export function deviceLabel(device: Pick<DeviceStatus, "modelId" | "mac">): string {
-  return `${displayValue(device.modelId)} (${device.mac})`;
+/** 제목에 쓰는 장비명. 없으면 모델이다. */
+export function displayName(device: Pick<DeviceStatus, "name" | "modelId">): string {
+  return device.name === "" ? displayValue(device.modelId) : device.name;
 }
 
 /** 제어할 수 없는 까닭. 제어 가능하면 null. */

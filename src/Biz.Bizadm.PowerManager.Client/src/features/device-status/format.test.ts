@@ -1,13 +1,13 @@
 import {
   describeApiError,
-  deviceLabel,
+  displayName,
   formatCurrent,
   formatLastReport,
   formatPower,
   formatPowerFactor,
   formatSummary,
   formatVoltage,
-  sortByMac,
+  sortByName,
   uncontrollableReason,
 } from "./format";
 import type { DeviceStatus } from "./types";
@@ -15,6 +15,7 @@ import type { DeviceStatus } from "./types";
 function status(overrides: Partial<DeviceStatus> = {}): DeviceStatus {
   return {
     mac: "3a0000000001",
+    name: "",
     modelId: "B540_W",
     online: true,
     relay: "on",
@@ -66,15 +67,31 @@ describe("formatLastReport", () => {
 });
 
 describe("그 밖의 표시", () => {
-  it("mac 오름차순으로 늘어놓는다", () => {
-    const b = status({ mac: "3a0000000002" });
-    const a = status({ mac: "0a0000000009" });
-    expect(sortByMac({ [b.mac]: b, [a.mac]: a }).map((d) => d.mac)).toEqual([a.mac, b.mac]);
+  it("장비명 순서로, 장비명이 없으면 뒤에 mac 순서로 늘어놓는다", () => {
+    const devices = [
+      ["3a0000000002", ""],
+      ["0a0000000009", ""],
+      ["3a0000000005", "거실 10"],
+      ["3a0000000006", "거실 2"],
+      ["3a0000000008", "서재"],
+      ["3a0000000007", "서재"],
+      ["3a0000000009", "나무"],
+    ].map(([mac, name]) => status({ mac, name }));
+    expect(sortByName(Object.fromEntries(devices.map((d) => [d.mac, d]))).map((d) => d.mac)).toEqual([
+      "3a0000000006",
+      "3a0000000005",
+      "3a0000000009",
+      "3a0000000007",
+      "3a0000000008",
+      "0a0000000009",
+      "3a0000000002",
+    ]);
   });
 
-  it("장비를 모델과 mac으로 밝힌다", () => {
-    expect(deviceLabel(status())).toBe("B540_W (3a0000000001)");
-    expect(deviceLabel(status({ modelId: "" }))).toBe("— (3a0000000001)");
+  it("장비명이 없으면 모델을 제목으로 쓴다", () => {
+    expect(displayName(status({ name: "거실" }))).toBe("거실");
+    expect(displayName(status())).toBe("B540_W");
+    expect(displayName(status({ modelId: "" }))).toBe("—");
   });
 
   it("제어할 수 없는 까닭을 알린다", () => {

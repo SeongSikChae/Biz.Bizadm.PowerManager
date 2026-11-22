@@ -1,10 +1,10 @@
 import { Link } from "react-router";
 import { Button } from "@/components/ui/button";
 import { Card, CardAction, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { formatCurrent, formatLastReport, formatPower, formatPowerFactor, formatVoltage } from "@/features/device-status/format";
+import { DeviceSubtitle } from "@/features/device-status/DeviceLabel";
+import { displayName, formatCurrent, formatLastReport, formatPower, formatPowerFactor, formatVoltage } from "@/features/device-status/format";
 import { RelayControl } from "@/features/device-status/RelayControl";
 import type { DeviceStatus } from "@/features/device-status/types";
-import { displayValue } from "@/features/devices/deviceList";
 import { cn } from "@/lib/utils";
 
 /** 온라인 여부를 색 점과 글자로 보인다. */
@@ -35,8 +35,10 @@ export function DeviceCard({ device, now }: { device: DeviceStatus; now: number 
   return (
     <Card role="article" aria-label={device.mac}>
       <CardHeader>
-        <CardTitle>{displayValue(device.modelId)}</CardTitle>
-        <CardDescription className="font-mono">{device.mac}</CardDescription>
+        <CardTitle className="wrap-anywhere">{displayName(device)}</CardTitle>
+        <CardDescription className="wrap-anywhere">
+          <DeviceSubtitle device={device} />
+        </CardDescription>
         <CardAction>
           <OnlineStatus online={device.online} />
         </CardAction>

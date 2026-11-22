@@ -43,6 +43,29 @@ namespace Biz.Bizadm.PowerManager.Server.Spa.Devices
             return await db.Devices.Where(d => d.Mac == normalized).Select(d => d.MqttKey).SingleOrDefaultAsync(cancellationToken);
         }
 
+        /// <summary>
+        /// 장비명을 저장한다. 판정 순서는 mac 형식(400) → 등록(404) → 장비명(400)이고, 지금 값과 같으면 저장도 알림도 하지 않는다.
+        /// 바뀐 열만 저장하므로 등록 요청과 겹쳐도 서로의 값을 덮지 않는다.
+        /// </summary>
+        public async Task<DeviceCommandResult> RenameAsync(string mac, string? name, CancellationToken cancellationToken)
+        {
+            // 관리 API의 mac은 소문자 12자리다. 대문자는 형식 오류로 본다.
+            if (!DeviceIdentity.TryNormalizeMac(mac, out string? normalizedMac) || normalizedMac != mac)
+                return DeviceCommandResult.InvalidMac;
+            await using PowerManagerDbContext db = await factory.CreateDbContextAsync(cancellationToken);
+            DeviceRegistration? device = await db.Devices.SingleOrDefaultAsync(d => d.Mac == mac, cancellationToken);
+            if (device is null)
+                return DeviceCommandResult.NotFound;
+            if (!DeviceName.TryNormalize(name, out string? normalizedName))
+                return DeviceCommandResult.InvalidName;
+            if (device.Name == normalizedName)
+                return DeviceCommandResult.Success;
+            device.Name = normalizedName;
+            await db.SaveChangesAsync(cancellationToken);
+            states.NotifyChanged(mac);
+            return DeviceCommandResult.Success;
+        }
+
         private async Task<Result> RegisterOnceAsync(string mac, string? userId, string? modelId, string? company, CancellationToken cancellationToken)
         {
             DateTimeOffset now = timeProvider.GetUtcNow();

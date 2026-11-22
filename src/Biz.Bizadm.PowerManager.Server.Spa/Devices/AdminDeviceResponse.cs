@@ -5,6 +5,7 @@ namespace Biz.Bizadm.PowerManager.Server.Spa.Devices
     /// </summary>
     public sealed record AdminDeviceResponse(
         string Mac,
+        string Name,
         string UserId,
         string ModelId,
         string Company,

@@ -8,7 +8,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { deviceLabel } from "./format";
+import { DeviceLabel } from "./DeviceLabel";
 import type { DeviceStatus } from "./types";
 
 /** 장비를 밝힌 확인 창. "취소"나 Esc는 아무것도 하지 않고 닫는다. */
@@ -21,7 +21,7 @@ export function ConfirmDialog({
   confirmLabel,
   onConfirm,
 }: {
-  device: Pick<DeviceStatus, "modelId" | "mac">;
+  device: Pick<DeviceStatus, "name" | "modelId" | "mac">;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   title: string;
@@ -35,7 +35,9 @@ export function ConfirmDialog({
         <AlertDialogHeader>
           <AlertDialogTitle>{title}</AlertDialogTitle>
           <AlertDialogDescription>
-            <span className="block font-medium text-foreground">{deviceLabel(device)}</span>
+            <span className="block font-medium wrap-anywhere text-foreground">
+              <DeviceLabel device={device} />
+            </span>
             {description}
           </AlertDialogDescription>
         </AlertDialogHeader>

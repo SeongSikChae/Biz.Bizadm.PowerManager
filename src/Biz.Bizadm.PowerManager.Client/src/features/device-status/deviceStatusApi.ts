@@ -1,4 +1,5 @@
 import { createApi, fetchBaseQuery } from "@reduxjs/toolkit/query/react";
+import { deviceRenamed } from "./deviceStatusSlice";
 import type { DeviceSettings, DeviceStatus, ReportCondition, Schedule, StandbyCutoff } from "./types";
 
 export const deviceStatusApi = createApi({
@@ -10,6 +11,18 @@ export const deviceStatusApi = createApi({
     getStatuses: build.query<DeviceStatus[], void>({ query: () => "/status" }),
     /** 화면을 열 때마다 새로 읽는다(다른 화면에서 보낸 값이 있을 수 있다). */
     getSettings: build.query<DeviceSettings, string>({ query: (mac) => `/${mac}/settings`, keepUnusedDataFor: 0 }),
+    /** 장비명을 저장한다. 빈 값이면 지운다. 스트림이 끊겨 있어도 보이게 성공하면 slice의 이름을 바로 바꾼다. */
+    saveName: build.mutation<void, { mac: string; name: string }>({
+      query: ({ mac, name }) => ({ url: `/${mac}/name`, method: "PUT", body: { name } }),
+      async onQueryStarted(renamed, { dispatch, queryFulfilled }) {
+        try {
+          await queryFulfilled;
+          dispatch(deviceRenamed(renamed));
+        } catch {
+          // 실패는 부른 쪽이 결과로 알린다.
+        }
+      },
+    }),
     setRelay: build.mutation<void, { mac: string; on: boolean }>({
       query: ({ mac, on }) => ({ url: `/${mac}/relay`, method: "POST", body: { on } }),
     }),
@@ -37,6 +50,7 @@ export const deviceStatusApi = createApi({
 export const {
   useGetStatusesQuery,
   useGetSettingsQuery,
+  useSaveNameMutation,
   useSetRelayMutation,
   usePowerCycleMutation,
   useRebootMutation,

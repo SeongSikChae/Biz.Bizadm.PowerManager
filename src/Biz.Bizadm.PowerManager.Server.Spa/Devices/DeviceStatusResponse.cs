@@ -5,6 +5,7 @@ namespace Biz.Bizadm.PowerManager.Server.Spa.Devices
     /// </summary>
     public sealed record DeviceStatusResponse(
         string Mac,
+        string Name,
         string ModelId,
         bool Online,
         string Relay,

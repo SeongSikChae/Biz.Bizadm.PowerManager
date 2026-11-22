@@ -4,8 +4,10 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { useSaveStandbyCutoffMutation } from "@/features/device-status/deviceStatusApi";
 import { toOutcome, type SendOutcome } from "@/features/device-status/format";
-import type { DeviceStatus, StandbyCutoff } from "@/features/device-status/types";
+import type { StandbyCutoff } from "@/features/device-status/types";
+import { fieldText } from "./fields";
 import { Field, FIELDS, Section } from "./PowerSection";
+import type { SettingsProps } from "./ReportConditionForm";
 import { validateStandbyCutoff, type StandbyCutoffInput } from "./validation";
 
 function toInput(value: StandbyCutoff | null): StandbyCutoffInput {
@@ -16,14 +18,20 @@ function toInput(value: StandbyCutoff | null): StandbyCutoffInput {
   };
 }
 
-/** "대기전력 차단" 묶음. `initial`은 서버가 마지막으로 보낸 값이다. */
-export function StandbyCutoffForm({ device, initial, note }: { device: DeviceStatus; initial: StandbyCutoff | null; note: string }) {
+/** "대기전력 차단" 묶음. 설정을 읽기 전에는 비활성이고, 읽은 뒤 한 번 채운다. */
+export function StandbyCutoffForm({ device, initial, ready, loading, note }: SettingsProps<StandbyCutoff>) {
   const [save] = useSaveStandbyCutoffMutation();
-  const [input, setInput] = useState(() => toInput(initial));
+  const [input, setInput] = useState(() => toInput(null));
+  const [filled, setFilled] = useState(false);
   const [errors, setErrors] = useState<Partial<Record<"thresholdWatts" | "delay", string>>>({});
   const [sending, setSending] = useState(false);
   const [outcome, setOutcome] = useState<SendOutcome | null>(null);
   const switchId = useId();
+  // 다시 마운트하지 않고 렌더링 중 상태를 맞춰 한 번만 채운다.
+  if (ready && !filled) {
+    setFilled(true);
+    setInput(toInput(initial));
+  }
 
   const submit = async () => {
     const checked = validateStandbyCutoff(input);
@@ -38,26 +46,39 @@ export function StandbyCutoffForm({ device, initial, note }: { device: DeviceSta
   return (
     <Section
       title="대기전력 차단"
-      notes={[note, "값의 의미와 단위는 추정입니다"]}
+      notes={[note]}
       outcome={outcome}
+      loading={loading}
       actions={
-        <Button disabled={!device.controllable || sending} onClick={() => void submit()}>
+        <Button disabled={!device.controllable || sending || !ready} onClick={() => void submit()}>
           저장
         </Button>
       }
     >
       <div className="flex items-center gap-2.5">
-        <Switch id={switchId} checked={input.enabled} onCheckedChange={(enabled) => setInput((current) => ({ ...current, enabled }))} />
+        <Switch
+          id={switchId}
+          checked={input.enabled}
+          disabled={!ready}
+          onCheckedChange={(enabled) => setInput((current) => ({ ...current, enabled }))}
+        />
         <Label htmlFor={switchId}>사용</Label>
       </div>
       <div className={FIELDS}>
         <Field
-          label="기준 전력 (W)"
+          text={fieldText("thresholdWatts", device.modelId)}
           value={input.thresholdWatts}
           onChange={(thresholdWatts) => setInput((current) => ({ ...current, thresholdWatts }))}
           error={errors.thresholdWatts}
+          disabled={!ready}
         />
-        <Field label="지연" value={input.delay} onChange={(delay) => setInput((current) => ({ ...current, delay }))} error={errors.delay} />
+        <Field
+          text={fieldText("delay", device.modelId)}
+          value={input.delay}
+          onChange={(delay) => setInput((current) => ({ ...current, delay }))}
+          error={errors.delay}
+          disabled={!ready}
+        />
       </div>
     </Section>
   );

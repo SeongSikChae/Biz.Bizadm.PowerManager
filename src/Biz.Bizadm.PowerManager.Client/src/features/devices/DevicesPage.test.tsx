@@ -12,6 +12,7 @@ const NOW = Date.parse("2026-11-19T06:00:00Z");
 function device(i: number, overrides: Partial<Device> = {}): Device {
   return {
     mac: "3a00" + i.toString(16).padStart(8, "0"),
+    name: "",
     userId: "user-01",
     modelId: "M130-W",
     company: "DAWONDNS",
@@ -65,7 +66,7 @@ const macsOnScreen = () =>
   screen
     .getAllByRole("row")
     .slice(1)
-    .map((row) => within(row).getAllByRole("cell")[0].textContent);
+    .map((row) => within(row).getAllByRole("cell")[1].textContent);
 
 describe("DevicesPage", () => {
   it("처음 불러오는 동안 스켈레톤을 보이고 등록 대수를 숨긴다", async () => {
@@ -84,20 +85,50 @@ describe("DevicesPage", () => {
 
   it("열 순서, MAC 원본, 빈 값 —, 등록·마지막 요청 시각을 표시한다", async () => {
     const withBlank = device(0, { mac: "5e0000000201", modelId: "", company: "", userId: "", lastRequestedAt: new Date(NOW - 5 * 60_000).toISOString() });
-    respond(json([withBlank, device(10)]));
+    respond(json([withBlank, device(10, { name: "거실 TV" })]));
     renderPage();
 
     await screen.findByRole("table", { name: "장비 목록" });
-    expect(screen.getAllByRole("columnheader").map((h) => h.textContent)).toEqual(["MAC", "모델", "제조사", "사용자", "등록", "마지막 요청"]);
+    expect(screen.getAllByRole("columnheader").map((h) => h.textContent)).toEqual(["이름", "MAC", "모델", "제조사", "사용자", "등록", "마지막 요청"]);
     const cells = within(screen.getAllByRole("row")[1]).getAllByRole("cell");
-    expect(cells[0]).toHaveTextContent(/^5e0000000201$/);
-    expect(cells[0]).toHaveClass("font-mono");
-    expect(cells[1]).toHaveTextContent(/^—$/);
+    expect(cells[0]).toHaveTextContent(/^—$/);
+    expect(cells[1]).toHaveTextContent(/^5e0000000201$/);
+    expect(cells[1]).toHaveClass("font-mono");
     expect(cells[2]).toHaveTextContent(/^—$/);
     expect(cells[3]).toHaveTextContent(/^—$/);
-    expect(cells[4]).toHaveTextContent(formatDateTime(withBlank.registeredAt));
-    expect(cells[5]).toHaveTextContent("5분 전");
-    expect(cells[5]).toHaveTextContent(formatDateTime(withBlank.lastRequestedAt));
+    expect(cells[4]).toHaveTextContent(/^—$/);
+    expect(cells[5]).toHaveTextContent(formatDateTime(withBlank.registeredAt));
+    expect(cells[6]).toHaveTextContent("5분 전");
+    expect(cells[6]).toHaveTextContent(formatDateTime(withBlank.lastRequestedAt));
+  });
+
+  it("장비명을 보이고 장비명으로 검색한다", async () => {
+    const user = userEvent.setup();
+    respond(json([device(0), device(1, { name: "거실 TV" })]));
+    renderPage();
+    await screen.findByRole("table", { name: "장비 목록" });
+    expect(screen.getByRole("cell", { name: "거실 TV" })).toBeInTheDocument();
+
+    const search = screen.getByPlaceholderText("이름, MAC, 모델, 사용자로 검색");
+    await user.type(search, "거실 tv");
+    expect(macsOnScreen()).toEqual([device(1).mac]);
+  });
+
+  it("다시 열면 목록을 다시 읽어 바뀐 장비명을 보인다", async () => {
+    const store = makeStore();
+    const ui = (
+      <Provider store={store}>
+        <DevicesPage getNow={() => NOW} />
+      </Provider>
+    );
+    respond(json([device(0)]), json([device(0, { name: "거실 TV" })]));
+    const first = render(ui);
+    await screen.findByRole("table", { name: "장비 목록" });
+    first.unmount();
+
+    render(ui);
+    expect(await screen.findByRole("cell", { name: "거실 TV" })).toBeInTheDocument();
+    expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
   it("등록된 장비가 없으면 빈 목록 안내와 0대를 보인다", async () => {

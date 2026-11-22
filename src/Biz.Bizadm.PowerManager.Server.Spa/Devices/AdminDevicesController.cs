@@ -6,11 +6,12 @@ using Microsoft.EntityFrameworkCore;
 namespace Biz.Bizadm.PowerManager.Server.Spa.Devices
 {
     /// <summary>
-    /// 관리 화면용 장비 조회 API. 관리 포트에서만 처리한다(<see cref="AdminPortOnlyAttribute"/>).
+    /// 관리 화면용 장비 조회·장비명 API. 관리 포트에서만 처리한다(<see cref="AdminPortOnlyAttribute"/>).
     /// </summary>
     [ApiController]
     [AdminPortOnly]
-    public sealed class AdminDevicesController(IDbContextFactory<PowerManagerDbContext> factory) : ControllerBase
+    public sealed class AdminDevicesController(IDbContextFactory<PowerManagerDbContext> factory, DeviceRegistrationService registrations)
+        : ControllerBase
     {
         /// <summary>
         /// 저장된 장비 전체를 마지막 요청이 최근인 순서(같으면 mac 오름차순)로 반환한다.
@@ -24,8 +25,18 @@ namespace Biz.Bizadm.PowerManager.Server.Spa.Devices
                 .ThenBy(d => d.Mac)
                 .ToListAsync(cancellationToken);
             return devices
-                .Select(d => new AdminDeviceResponse(d.Mac, d.UserId, d.ModelId, d.Company, d.RegisteredAt, d.LastRequestedAt))
+                .Select(d => new AdminDeviceResponse(d.Mac, d.Name, d.UserId, d.ModelId, d.Company, d.RegisteredAt, d.LastRequestedAt))
                 .ToList();
+        }
+
+        /// <summary>
+        /// 장비명을 저장하거나(빈 값이면) 지운다.
+        /// </summary>
+        [HttpPut("/api/admin/devices/{mac}/name")]
+        public async Task<IActionResult> Rename(string mac, [FromBody] DeviceNameRequest request, CancellationToken cancellationToken)
+        {
+            DeviceCommandResult result = await registrations.RenameAsync(mac, request.Name, cancellationToken);
+            return result == DeviceCommandResult.Success ? NoContent() : Problem(statusCode: result.StatusCode, title: result.Title);
         }
     }
 }

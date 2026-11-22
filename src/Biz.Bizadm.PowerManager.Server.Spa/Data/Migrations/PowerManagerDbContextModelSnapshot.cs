@@ -38,6 +38,11 @@ namespace Biz.Bizadm.PowerManager.Server.Spa.Data.Migrations
                         .HasMaxLength(32)
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("TEXT");
+
                     b.Property<long>("RegisteredAt")
                         .HasColumnType("INTEGER");
 

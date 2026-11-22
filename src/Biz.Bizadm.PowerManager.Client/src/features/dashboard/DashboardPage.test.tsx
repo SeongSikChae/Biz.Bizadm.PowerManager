@@ -16,6 +16,7 @@ const B = "3a0000000002";
 function status(mac: string, overrides: Partial<DeviceStatus> = {}): DeviceStatus {
   return {
     mac,
+    name: "",
     modelId: "B540_W",
     online: true,
     relay: "on",
@@ -90,6 +91,34 @@ describe("DashboardPage", () => {
     expect(screen.getByText("온라인 1대 · 오프라인 1대 · 합계 111.9 W")).toBeInTheDocument();
     expect(screen.getByText("실시간 연결됨")).toBeInTheDocument();
     expect(cardMacs()).toEqual([A, B]);
+  });
+
+  it("장비명이 있으면 제목에 장비명, 아래에 모델과 mac을 보이고 확인 창에도 밝힌다", async () => {
+    renderPage();
+    openWith(status(A, { name: "거실 TV" }), status(B));
+    const c = card(A);
+    expect(within(c).getByText("거실 TV")).toHaveAttribute("data-slot", "card-title");
+    expect(c.querySelector("[data-slot=card-description]")).toHaveTextContent(`B540_W · ${A}`);
+    expect(within(c).getByText(A)).toHaveClass("font-mono");
+    expect(card(B).querySelector("[data-slot=card-title]")).toHaveTextContent("B540_W");
+    expect(card(B).querySelector("[data-slot=card-description]")).toHaveTextContent(new RegExp(`^${B}$`));
+
+    await userEvent.click(within(c).getByRole("switch", { name: "릴레이" }));
+    const dialog = screen.getByRole("alertdialog");
+    expect(dialog).toHaveTextContent(`거실 TV — B540_W (${A})`);
+    expect(within(dialog).getByText(A)).toHaveClass("font-mono");
+  });
+
+  it("장비명 순서로 먼저, 장비명이 없는 장비는 뒤에 보이고 바뀌면 바로 반영한다", () => {
+    const C = "3a0000000003";
+    renderPage();
+    openWith(status(A), status(B, { name: "서재" }), status(C, { name: "거실" }));
+    expect(cardMacs()).toEqual([C, B, A]);
+    act(() => stream().send("device", status(A, { name: "가게" })));
+    expect(cardMacs()).toEqual([A, C, B]);
+    expect(within(card(A)).getByText("가게")).toBeInTheDocument();
+    act(() => stream().send("device", status(C)));
+    expect(cardMacs()).toEqual([A, B, C]);
   });
 
   it("카드에 모델·mac·온라인 글자·계량 값·릴레이·마지막 보고를 보인다", () => {

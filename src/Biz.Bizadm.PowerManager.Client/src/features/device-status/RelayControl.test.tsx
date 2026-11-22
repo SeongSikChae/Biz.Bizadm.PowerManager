@@ -11,6 +11,7 @@ const MAC = "3a0000000001";
 function status(overrides: Partial<DeviceStatus> = {}): DeviceStatus {
   return {
     mac: MAC,
+    name: "",
     modelId: "B540_W",
     online: true,
     relay: "on",

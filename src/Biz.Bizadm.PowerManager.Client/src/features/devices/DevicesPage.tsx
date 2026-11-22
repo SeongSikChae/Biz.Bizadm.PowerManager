@@ -77,12 +77,12 @@ function Notice({ icon, title, children }: { icon: ReactNode; title: string; chi
 }
 
 /**
- * 장비 목록. 화면은 서버에서 받은 목록이 있는지(빈 목록 포함)로 정한다.
+ * 장비 목록. 열 때마다 다시 읽는다(다른 화면에서 장비명을 바꿨을 수 있다). 화면은 서버에서 받은 목록이 있는지(빈 목록 포함)로 정한다.
  * 받은 목록이 없으면 스켈레톤 또는 목록 자리 오류, 있으면 기존 화면을 유지하고 오류는 그 위에 보인다.
  * 오류 판정은 `isError`가 아니라 `error`로 한다: `isError`는 다시 불러오기를 시작하면 false가 되지만 `error`는 성공할 때까지 남는다.
  */
 export function DevicesPage({ getNow = Date.now }: { getNow?: () => number }) {
-  const { data, isFetching, error, refetch } = useGetDevicesQuery();
+  const { data, isFetching, error, refetch } = useGetDevicesQuery(undefined, { refetchOnMountOrArgChange: true });
   const [query, setQuery] = useState("");
   const [sort, setSort] = useState<Sort>(DEFAULT_SORT);
   const [page, setPage] = useState(1);
@@ -164,7 +164,7 @@ export function DevicesPage({ getNow = Date.now }: { getNow?: () => number }) {
                   type="search"
                   value={query}
                   onChange={(e) => changeQuery(e.target.value)}
-                  placeholder="MAC, 모델, 사용자로 검색"
+                  placeholder="이름, MAC, 모델, 사용자로 검색"
                   className="h-9 pl-8"
                 />
               </div>
@@ -178,9 +178,10 @@ export function DevicesPage({ getNow = Date.now }: { getNow?: () => number }) {
                 </Notice>
               ) : (
                 <div className="rounded-lg border">
-                  <Table aria-label="장비 목록" className="min-w-[720px]">
+                  <Table aria-label="장비 목록" className="min-w-[840px]">
                     <TableHeader>
                       <TableRow className="hover:bg-transparent">
+                        <TableHead className="text-muted-foreground">이름</TableHead>
                         <TableHead className="text-muted-foreground">MAC</TableHead>
                         <TableHead className="text-muted-foreground">모델</TableHead>
                         <TableHead className="text-muted-foreground">제조사</TableHead>
@@ -192,6 +193,7 @@ export function DevicesPage({ getNow = Date.now }: { getNow?: () => number }) {
                     <TableBody>
                       {rows.map((d) => (
                         <TableRow key={d.mac}>
+                          <TableCell className="font-medium">{displayValue(d.name)}</TableCell>
                           <TableCell className="font-mono font-medium">{d.mac}</TableCell>
                           <TableCell>{displayValue(d.modelId)}</TableCell>
                           <TableCell className="text-muted-foreground">{displayValue(d.company)}</TableCell>

@@ -13,6 +13,11 @@ namespace Biz.Bizadm.PowerManager.Server.Spa.Data
 
         public string Company { get; set; } = string.Empty;
 
+        /// <summary>
+        /// 사용자가 정한 장비명. 없으면 빈 문자열이다. 장치의 등록 요청은 바꾸지 않는다.
+        /// </summary>
+        public string Name { get; set; } = string.Empty;
+
         public string MqttKey { get; set; } = null!;
 
         public DateTimeOffset RegisteredAt { get; set; }

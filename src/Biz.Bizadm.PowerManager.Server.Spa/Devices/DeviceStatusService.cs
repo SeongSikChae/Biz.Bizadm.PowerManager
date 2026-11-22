@@ -16,9 +16,9 @@ namespace Biz.Bizadm.PowerManager.Server.Spa.Devices
             await using PowerManagerDbContext db = await factory.CreateDbContextAsync(cancellationToken);
             var devices = await db.Devices.AsNoTracking()
                 .OrderBy(d => d.Mac)
-                .Select(d => new { d.Mac, d.ModelId })
+                .Select(d => new { d.Mac, d.Name, d.ModelId })
                 .ToListAsync(cancellationToken);
-            return devices.Select(d => Create(d.Mac, d.ModelId)).ToList();
+            return devices.Select(d => Create(d.Mac, d.Name, d.ModelId)).ToList();
         }
 
         /// <summary>
@@ -27,11 +27,11 @@ namespace Biz.Bizadm.PowerManager.Server.Spa.Devices
         public async Task<DeviceStatusResponse?> FindAsync(string mac, CancellationToken cancellationToken)
         {
             await using PowerManagerDbContext db = await factory.CreateDbContextAsync(cancellationToken);
-            string? modelId = await db.Devices.AsNoTracking()
+            var device = await db.Devices.AsNoTracking()
                 .Where(d => d.Mac == mac)
-                .Select(d => d.ModelId)
+                .Select(d => new { d.Name, d.ModelId })
                 .SingleOrDefaultAsync(cancellationToken);
-            return modelId is null ? null : Create(mac, modelId);
+            return device is null ? null : Create(mac, device.Name, device.ModelId);
         }
 
         /// <summary>
@@ -39,7 +39,7 @@ namespace Biz.Bizadm.PowerManager.Server.Spa.Devices
         /// </summary>
         public DeviceChangeSubscription Subscribe() => store.Subscribe();
 
-        private DeviceStatusResponse Create(string mac, string modelId)
+        private DeviceStatusResponse Create(string mac, string name, string modelId)
         {
             DeviceState state = store.Get(mac);
             string relay = state.Relay switch
@@ -48,7 +48,7 @@ namespace Biz.Bizadm.PowerManager.Server.Spa.Devices
                 RelayState.Off => "off",
                 _ => "unknown",
             };
-            return new DeviceStatusResponse(mac, modelId, state.Online, relay, state.Voltage, state.Current, state.PowerFactor,
+            return new DeviceStatusResponse(mac, name, modelId, state.Online, relay, state.Voltage, state.Current, state.PowerFactor,
                 state.Power, state.LastReportAt, state.Controllable);
         }
     }

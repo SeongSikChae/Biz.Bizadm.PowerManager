@@ -40,8 +40,13 @@ const deviceStatusSlice = createSlice({
     deviceReceived(state, action: PayloadAction<DeviceStatus>) {
       state.devices[action.payload.mac] = action.payload;
     },
+    /** 이 화면에서 저장한 장비명. */
+    deviceRenamed(state, action: PayloadAction<{ mac: string; name: string }>) {
+      const device = state.devices[action.payload.mac] as DeviceStatus | undefined;
+      if (device !== undefined) device.name = action.payload.name;
+    },
   },
 });
 
-export const { statusesLoaded, streamOpened, streamLost, snapshotReceived, deviceReceived } = deviceStatusSlice.actions;
+export const { statusesLoaded, streamOpened, streamLost, snapshotReceived, deviceReceived, deviceRenamed } = deviceStatusSlice.actions;
 export const deviceStatusReducer = deviceStatusSlice.reducer;

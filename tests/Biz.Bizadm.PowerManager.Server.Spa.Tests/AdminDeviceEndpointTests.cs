@@ -18,7 +18,7 @@ namespace Biz.Bizadm.PowerManager.Server.Spa.Tests;
 public sealed class AdminDeviceEndpointTests
 {
     private const string ListPath = "/api/admin/devices";
-    private static readonly string[] ExpectedFields = ["mac", "userId", "modelId", "company", "registeredAt", "lastRequestedAt"];
+    private static readonly string[] ExpectedFields = ["mac", "name", "userId", "modelId", "company", "registeredAt", "lastRequestedAt"];
 
     private static string tempRoot = null!;
 
@@ -84,11 +84,11 @@ public sealed class AdminDeviceEndpointTests
         LastRequestedAt = lastRequestedAt,
     };
 
-    // C1·C2: 관리 포트는 필드 여섯 개짜리 배열을 마지막 요청 최근 순(같으면 mac 오름차순)으로 준다. MQTT 키는 없다.
+    // C1·C2: 관리 포트는 필드 일곱 개짜리 배열을 마지막 요청 최근 순(같으면 mac 오름차순)으로 준다. MQTT 키는 없다.
     [TestMethod]
     [DataRow(80)]
     [DataRow(443)]
-    public async Task List_AdminPort_ReturnsSixFieldsSortedByLastRequested(int port)
+    public async Task List_AdminPort_ReturnsSevenFieldsSortedByLastRequested(int port)
     {
         await using WebApplication app = await StartAsync();
         DateTimeOffset t1 = new DateTimeOffset(2026, 11, 19, 1, 0, 0, TimeSpan.Zero);

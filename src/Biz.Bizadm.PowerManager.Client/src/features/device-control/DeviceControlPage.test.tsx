@@ -20,6 +20,7 @@ const SETTINGS: DeviceSettings = {
 function status(overrides: Partial<DeviceStatus> = {}): DeviceStatus {
   return {
     mac: MAC,
+    name: "",
     modelId: "B540_W",
     online: true,
     relay: "on",
@@ -43,7 +44,7 @@ interface Sent {
   body: unknown;
 }
 
-let settings: () => Response;
+let settings: () => Response | Promise<Response>;
 /** 제어 요청의 응답. */
 let respond: () => Response | Promise<Response>;
 let sent: Sent[];
@@ -90,17 +91,32 @@ function renderPage(mac = MAC) {
   );
 }
 
-async function open(device: DeviceStatus = status()) {
+/** 설정 응답을 기다리지 않고 연다. */
+function openLoading(device: DeviceStatus = status()) {
   renderPage();
   act(() => {
     stream().open();
     stream().send("snapshot", [device]);
   });
-  await screen.findByRole("group", { name: "보고 조건" });
 }
+
+async function open(device: DeviceStatus = status()) {
+  openLoading(device);
+  await waitFor(() => expect(screen.queryByText("설정을 불러오는 중")).not.toBeInTheDocument());
+}
+
+function deferred() {
+  let resolve!: (response: Response) => void;
+  const promise = new Promise<Response>((done) => (resolve = done));
+  return { promise, resolve };
+}
+
+const SECTIONS = ["전원", "보고 조건", "대기전력 차단", "예약 전원 재투입"];
+const SETTING_SECTIONS = SECTIONS.slice(1);
 
 const group = (name: string) => within(screen.getByRole("group", { name }));
 const dialog = () => within(screen.getByRole("alertdialog"));
+const nameDialog = () => within(screen.getByRole("dialog", { name: "이름 변경" }));
 const type = async (box: HTMLElement, text: string) => {
   await userEvent.clear(box);
   if (text !== "") await userEvent.type(box, text);
@@ -140,16 +156,255 @@ describe("DeviceControlPage: 머리", () => {
     expect(screen.getByRole("status", { name: "장비 상태를 불러오는 중" })).toBeInTheDocument();
     expect(screen.queryByText("장비를 찾을 수 없습니다")).not.toBeInTheDocument();
   });
+});
 
-  it("설정을 불러오지 못하면 원인과 '다시 시도'를 보인다", async () => {
+describe("DeviceControlPage: 설정을 불러오는 동안", () => {
+  const fields = (name: string) => [
+    ...group(name).getAllByRole("textbox"),
+    ...group(name).queryAllByRole("switch"),
+    ...group(name).queryAllByRole("checkbox"),
+  ];
+  const removeSchedule = async () => {
+    await userEvent.click(group("예약 전원 재투입").getByRole("button", { name: "삭제" }));
+    await userEvent.click(dialog().getByRole("button", { name: "삭제" }));
+  };
+
+  it("네 묶음을 바로 보이고 설정 묶음의 입력과 저장만 비활성이다", async () => {
+    settings = () => new Promise<Response>(() => {});
+    openLoading();
+    for (const name of SECTIONS) expect(screen.getByRole("group", { name })).toBeInTheDocument();
+    for (const name of SETTING_SECTIONS) {
+      for (const field of fields(name)) expect(field).toBeDisabled();
+      for (const box of group(name).getAllByRole("textbox")) expect(box).toHaveValue("");
+      const save = group(name).getByRole("button", { name: "저장" });
+      expect(save).toBeDisabled();
+      expect(group(name).getByRole("status")).toHaveTextContent("설정을 불러오는 중");
+      expect(group(name).getByRole("status").parentElement).toBe(save.parentElement);
+      expect(screen.getByRole("group", { name })).toHaveAttribute("aria-busy", "true");
+    }
+    expect(document.querySelector("[data-slot=skeleton]")).toBeNull();
+    expect(group("전원").queryByRole("status")).not.toBeInTheDocument();
+    expect(group("전원").getByRole("textbox")).toBeEnabled();
+    expect(group("전원").getByRole("button", { name: "실행" })).toBeEnabled();
+    expect(group("전원").getByRole("switch", { name: "릴레이" })).toBeEnabled();
+    expect(group("예약 전원 재투입").getByRole("button", { name: "삭제" })).toBeEnabled();
+  });
+
+  it("응답이 오면 같은 묶음에 값을 채우고 활성으로 바꾼다", async () => {
+    const response = deferred();
+    settings = () => response.promise;
+    openLoading();
+    const before = SECTIONS.map((name) => screen.getByRole("group", { name }));
+    await act(async () => response.resolve(json(SETTINGS)));
+    await waitFor(() => expect(screen.queryByText("설정을 불러오는 중")).not.toBeInTheDocument());
+    expect(SECTIONS.map((name) => screen.getByRole("group", { name }))).toEqual(before);
+    for (const name of SETTING_SECTIONS) {
+      for (const field of fields(name)) expect(field).toBeEnabled();
+      expect(group(name).getByRole("button", { name: "저장" })).toBeEnabled();
+      expect(screen.getByRole("group", { name })).toHaveAttribute("aria-busy", "false");
+    }
+    expect(group("보고 조건").getByRole("textbox", { name: "최소 간격 (초)" })).toHaveValue("60");
+    expect(group("대기전력 차단").getByRole("switch", { name: "사용" })).toBeChecked();
+    expect(group("예약 전원 재투입").getByRole("textbox", { name: "시" })).toHaveValue("03");
+  });
+
+  it("제어할 수 없는 장비면 응답이 와도 저장은 비활성이고 입력은 활성이다", async () => {
+    await open(status({ online: false, controllable: false }));
+    expect(group("보고 조건").getByRole("button", { name: "저장" })).toBeDisabled();
+    expect(group("보고 조건").getByRole("textbox", { name: "최소 간격 (초)" })).toBeEnabled();
+  });
+
+  it("실패하면 묶음을 둔 채 위에 원인을 보이고, 다시 시도하는 동안 안내를 두었다가 성공하면 채운다", async () => {
     settings = () => json({}, 500);
-    renderPage();
-    act(() => stream().send("snapshot", [status()]));
-    const alert = await screen.findByRole("alert");
+    await open();
+    const alert = screen.getByRole("alert");
+    expect(alert).toHaveTextContent("설정을 불러오지 못했습니다");
     expect(alert).toHaveTextContent("서버 응답: 500");
-    settings = () => json(NO_SETTINGS);
+    expect(alert.compareDocumentPosition(screen.getByRole("group", { name: "전원" })) & Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(0);
+    for (const name of SETTING_SECTIONS) {
+      for (const field of fields(name)) expect(field).toBeDisabled();
+      expect(group(name).getByRole("button", { name: "저장" })).toBeDisabled();
+      expect(group(name).queryByRole("status")).not.toBeInTheDocument();
+    }
+    expect(group("예약 전원 재투입").getByRole("button", { name: "삭제" })).toBeEnabled();
+
+    const retry = deferred();
+    settings = () => retry.promise;
     await userEvent.click(within(alert).getByRole("button", { name: "다시 시도" }));
-    expect(await screen.findByRole("group", { name: "보고 조건" })).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByRole("button", { name: "다시 시도" })).toBeDisabled());
+    expect(screen.getByRole("alert")).toHaveTextContent("서버 응답: 500");
+    expect(screen.getAllByText("설정을 불러오는 중")).toHaveLength(3);
+
+    await act(async () => retry.resolve(json(SETTINGS)));
+    await waitFor(() => expect(screen.queryByRole("alert")).not.toBeInTheDocument());
+    expect(group("보고 조건").getByRole("textbox", { name: "최소 간격 (초)" })).toHaveValue("60");
+    expect(group("보고 조건").getByRole("button", { name: "저장" })).toBeEnabled();
+  });
+
+  it("다시 시도도 실패하면 새 원인을 보이고 비활성으로 남는다", async () => {
+    settings = () => json({}, 500);
+    await open();
+    settings = () => json({}, 404);
+    await userEvent.click(screen.getByRole("button", { name: "다시 시도" }));
+    await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent("등록되지 않은 장비입니다"));
+    expect(screen.getByRole("button", { name: "다시 시도" })).toBeEnabled();
+    expect(group("보고 조건").getByRole("button", { name: "저장" })).toBeDisabled();
+  });
+
+  it("응답 전에 예약을 지우면 늦게 온 옛 예약으로 채우지 않는다", async () => {
+    const response = deferred();
+    settings = () => response.promise;
+    openLoading();
+    await removeSchedule();
+    const form = group("예약 전원 재투입");
+    expect(await form.findByText("장비에 보냈습니다")).toBeInTheDocument();
+    expect(sent).toEqual([{ method: "DELETE", path: `/${MAC}/schedule`, body: null }]);
+    expect(form.getByText("설정을 불러오는 중")).toHaveClass("sr-only");
+    expect(group("보고 조건").getByText("설정을 불러오는 중")).not.toHaveClass("sr-only");
+
+    await act(async () => response.resolve(json(SETTINGS)));
+    await waitFor(() => expect(form.queryByText("설정을 불러오는 중")).not.toBeInTheDocument());
+    expect(form.getByText("장비에 보냈습니다")).toBeInTheDocument();
+    for (const box of form.getAllByRole("textbox")) expect(box).toHaveValue("");
+    for (const box of form.getAllByRole("checkbox")) expect(box).not.toBeChecked();
+    expect(form.getByRole("switch", { name: "사용" })).not.toBeChecked();
+    expect(group("보고 조건").getByRole("textbox", { name: "최소 간격 (초)" })).toHaveValue("60");
+  });
+
+  it("예약 삭제보다 설정 응답이 먼저 오면 채웠다가 삭제가 성공하면 비운다", async () => {
+    const response = deferred();
+    const removal = deferred();
+    settings = () => response.promise;
+    respond = () => removal.promise;
+    openLoading();
+    await removeSchedule();
+    const form = group("예약 전원 재투입");
+    await act(async () => response.resolve(json(SETTINGS)));
+    await waitFor(() => expect(form.getByRole("textbox", { name: "시" })).toHaveValue("03"));
+    await act(async () => removal.resolve(new Response(null, { status: 204 })));
+    await waitFor(() => expect(form.getByRole("textbox", { name: "시" })).toHaveValue(""));
+  });
+
+  it("응답 전의 예약 삭제가 실패하면 원인을 보이고 설정은 채운다", async () => {
+    const response = deferred();
+    settings = () => response.promise;
+    respond = () => json({}, 409);
+    openLoading();
+    await removeSchedule();
+    const form = group("예약 전원 재투입");
+    expect(await form.findByRole("alert")).toHaveTextContent("(409)");
+    expect(form.getByText("설정을 불러오는 중")).not.toHaveClass("sr-only");
+    await act(async () => response.resolve(json(SETTINGS)));
+    await waitFor(() => expect(form.getByRole("textbox", { name: "시" })).toHaveValue("03"));
+  });
+});
+
+describe("DeviceControlPage: 장비명", () => {
+  const rename = () => userEvent.click(screen.getByRole("button", { name: "이름 변경" }));
+  const box = () => nameDialog().getByRole("textbox", { name: "장비 이름" });
+
+  it("장비명이 있으면 제목에 장비명, 아래에 모델과 mac을 보이고 확인 창에도 밝힌다", async () => {
+    await open(status({ name: "거실 TV" }));
+    const heading = screen.getByRole("heading", { level: 1, name: "거실 TV" });
+    expect(heading.closest("header")).toHaveTextContent(`B540_W · ${MAC}`);
+    expect(screen.getByText(MAC)).toHaveClass("font-mono");
+    await userEvent.click(group("전원").getByRole("button", { name: "재부팅" }));
+    expect(screen.getByRole("alertdialog")).toHaveTextContent(`거실 TV — B540_W (${MAC})`);
+  });
+
+  it("장비를 밝힌 창에서 이름을 저장하면 닫히고 머리가 바뀐다(스트림이 끊겨 있어도)", async () => {
+    await open();
+    act(() => stream().fail(FakeEventSource.CONNECTING));
+    await rename();
+    expect(nameDialog().getByText(MAC)).toHaveClass("font-mono");
+    expect(screen.getByRole("dialog")).toHaveTextContent(`B540_W (${MAC})`);
+    expect(box()).toHaveValue("");
+    expect(box()).toHaveAccessibleDescription("30자까지. 비워서 저장하면 이름을 지웁니다");
+    await type(box(), "  거실 TV ");
+    await userEvent.click(nameDialog().getByRole("button", { name: "저장" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    expect(sent).toEqual([{ method: "PUT", path: `/${MAC}/name`, body: { name: "거실 TV" } }]);
+    expect(screen.getByRole("heading", { level: 1, name: "거실 TV" })).toBeInTheDocument();
+  });
+
+  it("비워서 저장하면 이름을 지운다(Enter로도 저장한다)", async () => {
+    await open(status({ name: "거실 TV" }));
+    await rename();
+    expect(box()).toHaveValue("거실 TV");
+    await userEvent.clear(box());
+    await userEvent.type(box(), "{Enter}");
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    expect(sent).toEqual([{ method: "PUT", path: `/${MAC}/name`, body: { name: "" } }]);
+    expect(screen.getByRole("heading", { level: 1, name: "B540_W" })).toBeInTheDocument();
+  });
+
+  it.each(["취소", "Esc"])("%s 는 아무것도 보내지 않고 닫고, 다시 열면 지금 이름으로 시작한다", async (how) => {
+    await open(status({ name: "거실 TV" }));
+    await rename();
+    await type(box(), "서재");
+    if (how === "Esc") await userEvent.keyboard("{Escape}");
+    else await userEvent.click(nameDialog().getByRole("button", { name: "취소" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    expect(sent).toEqual([]);
+    await rename();
+    expect(box()).toHaveValue("거실 TV");
+  });
+
+  it("쓸 수 없는 이름이면 보내지 않고 입력 옆에 이유를 보인다", async () => {
+    await open();
+    await rename();
+    fireEvent.change(box(), { target: { value: "가".repeat(31) } });
+    await userEvent.click(nameDialog().getByRole("button", { name: "저장" }));
+    expect(box()).toBeInvalid();
+    expect(box()).toHaveAccessibleDescription(/30자 이하로 입력하세요/);
+    expect(box()).toHaveAccessibleDescription(/30자까지/);
+    fireEvent.change(box(), { target: { value: `거${String.fromCodePoint(0x2028)}실` } });
+    await userEvent.click(nameDialog().getByRole("button", { name: "저장" }));
+    expect(box()).toHaveAccessibleDescription(/제어 문자는 쓸 수 없습니다/);
+    expect(sent).toEqual([]);
+  });
+
+  it("저장하는 동안 저장이 비활성이고 다시 보내지 않으며, 실패하면 창을 둔 채 원인을 보인다", async () => {
+    const response = deferred();
+    respond = () => response.promise;
+    await open();
+    await rename();
+    await type(box(), "거실");
+    await userEvent.click(nameDialog().getByRole("button", { name: "저장" }));
+    expect(nameDialog().getByRole("button", { name: "저장" })).toBeDisabled();
+    fireEvent.submit(box().closest("form")!);
+    await waitFor(() => expect(sent).toHaveLength(1));
+    await act(async () => response.resolve(json({}, 404)));
+    expect(await nameDialog().findByRole("alert")).toHaveTextContent("등록되지 않은 장비입니다");
+    expect(box()).toHaveValue("거실");
+    expect(nameDialog().getByRole("button", { name: "저장" })).toBeEnabled();
+    expect(sent).toHaveLength(1);
+  });
+
+  it("저장하는 동안 닫고 다시 연 창은 앞 저장이 성공해도 남는다", async () => {
+    const response = deferred();
+    respond = () => response.promise;
+    await open();
+    await rename();
+    await type(box(), "거실");
+    await userEvent.click(nameDialog().getByRole("button", { name: "저장" }));
+    await userEvent.click(nameDialog().getByRole("button", { name: "취소" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    await rename();
+    await type(box(), "서재");
+    await act(async () => response.resolve(new Response(null, { status: 204 })));
+    await waitFor(() => expect(screen.getByText("거실")).toBeInTheDocument());
+    expect(box()).toHaveValue("서재");
+    expect(nameDialog().getByRole("button", { name: "저장" })).toBeEnabled();
+    expect(sent).toHaveLength(1);
+  });
+
+  it("오프라인이어도 이름을 바꿀 수 있다", async () => {
+    await open(status({ online: false, controllable: false }));
+    await rename();
+    await type(box(), "거실");
+    await userEvent.click(nameDialog().getByRole("button", { name: "저장" }));
+    expect(await screen.findByRole("heading", { level: 1, name: "거실" })).toBeInTheDocument();
   });
 });
 
@@ -164,11 +419,10 @@ describe("DeviceControlPage: 전원", () => {
     expect(sent[1]).toEqual({ method: "POST", path: `/${MAC}/relay`, body: { on: false } });
   });
 
-  it("전원 재투입은 기본 10이고 단위 안내를 보이며 확인 창을 거쳐 보낸다", async () => {
+  it("전원 재투입은 기본 10이고 확인 창을 거쳐 보낸다", async () => {
     await open();
     const power = group("전원");
-    expect(power.getByRole("textbox", { name: "전원 재투입" })).toHaveValue("10");
-    expect(power.getByText("전원 재투입 단위는 약 1초입니다(B540에서 확인)")).toBeInTheDocument();
+    expect(power.getByRole("textbox", { name: "전원 재투입 (초)" })).toHaveValue("10");
     await userEvent.click(power.getByRole("button", { name: "실행" }));
     expect(screen.getByRole("alertdialog")).toHaveTextContent(`B540_W (${MAC})`);
     await userEvent.click(dialog().getByRole("button", { name: "취소" }));
@@ -182,12 +436,12 @@ describe("DeviceControlPage: 전원", () => {
 
   it.each(["", "0", "1000", "1.5"])("전원 재투입 %j 는 보내지 않고 입력 옆에 이유를 보인다", async (text) => {
     await open();
-    const box = group("전원").getByRole("textbox", { name: "전원 재투입" });
+    const box = group("전원").getByRole("textbox", { name: "전원 재투입 (초)" });
     await type(box, text);
     await userEvent.click(group("전원").getByRole("button", { name: "실행" }));
     expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
     expect(box).toBeInvalid();
-    expect(box).toHaveAccessibleDescription(/입력하세요/);
+    expect(box).toHaveAccessibleDescription(/^전원을 끄고 .*정수 .*입력하세요/);
     expect(sent).toEqual([]);
   });
 
@@ -198,7 +452,7 @@ describe("DeviceControlPage: 전원", () => {
     await userEvent.click(dialog().getByRole("button", { name: "실행" }));
     await power.findByText("장비에 보냈습니다");
 
-    const box = power.getByRole("textbox", { name: "전원 재투입" });
+    const box = power.getByRole("textbox", { name: "전원 재투입 (초)" });
     await type(box, "1000");
     await userEvent.click(power.getByRole("button", { name: "실행" }));
     expect(box).toBeInvalid();
@@ -292,8 +546,50 @@ describe("DeviceControlPage: 설정", () => {
       expect(group(name).getByText("서버가 마지막으로 보낸 값이며 장비의 현재 값과 다를 수 있습니다")).toBeInTheDocument();
     }
     for (const box of group("예약 전원 재투입").getAllByRole("checkbox")) expect(box).not.toBeChecked();
-    expect(group("대기전력 차단").getByText("값의 의미와 단위는 추정입니다")).toBeInTheDocument();
-    expect(group("대기전력 차단").getByRole("textbox", { name: "지연" })).toBeInTheDocument();
+    expect(screen.queryByText(/값의 의미와 단위는 추정입니다|전원 재투입 단위는/)).not.toBeInTheDocument();
+  });
+
+  it.each([
+    ["B540_W", ""],
+    ["M130-W", ", 추정"],
+    ["", ", 추정"],
+  ])("%j 장비의 입력마다 이름에 단위를, 아래에 설명을 보인다", async (modelId, estimated) => {
+    await open(status({ modelId }));
+    const labels = [
+      `전원 재투입 (초${estimated})`,
+      `최소 간격 (초${estimated})`,
+      `최대 간격 (초${estimated})`,
+      "변화 기준 (%, 추정)",
+      "기준 전력 (W, 추정)",
+      "지연 (초, 추정)",
+      "시",
+      "분",
+      "초",
+      "다시 켤 때까지의 초 (추정)",
+    ];
+    const boxes = screen.getAllByRole("textbox");
+    expect(boxes).toHaveLength(labels.length);
+    labels.forEach((name, i) => {
+      expect(boxes[i]).toHaveAccessibleName(name);
+      const hint = boxes[i].nextElementSibling;
+      expect(hint).toHaveAttribute("id", boxes[i].getAttribute("aria-describedby"));
+      expect(boxes[i]).toHaveAccessibleDescription(hint?.textContent ?? "없음");
+      expect(hint).toHaveTextContent(/\d~\d/);
+    });
+    expect(boxes[1]).toHaveAccessibleDescription(
+      modelId === "B540_W" ? /다시 보고하지 않습니다/ : /다시 보고하지 않는 것으로 추정합니다/,
+    );
+  });
+
+  it("오류는 설명 아래에 보인다", async () => {
+    await open();
+    const min = group("보고 조건").getByRole("textbox", { name: "최소 간격 (초)" });
+    await userEvent.click(group("보고 조건").getByRole("button", { name: "저장" }));
+    const [hintId, errorId] = min.getAttribute("aria-describedby")!.split(" ");
+    const hint = document.getElementById(hintId)!;
+    expect(hint).toHaveTextContent(/1~3600의 정수, 최대 간격 이하/);
+    expect(hint.nextElementSibling).toBe(document.getElementById(errorId));
+    expect(document.getElementById(errorId)).toHaveTextContent("값을 입력하세요.");
   });
 
   it("서버가 마지막으로 보낸 값으로 채운다", async () => {
@@ -313,9 +609,9 @@ describe("DeviceControlPage: 설정", () => {
   it("보고 조건을 저장하고, 스트림이 와도 입력과 안내가 남는다", async () => {
     await open();
     const form = group("보고 조건");
-    await type(form.getByRole("textbox", { name: "최소 간격" }), "30");
-    await type(form.getByRole("textbox", { name: "최대 간격" }), "300");
-    await type(form.getByRole("textbox", { name: "변화 기준" }), "7");
+    await type(form.getByRole("textbox", { name: "최소 간격 (초)" }), "30");
+    await type(form.getByRole("textbox", { name: "최대 간격 (초)" }), "300");
+    await type(form.getByRole("textbox", { name: "변화 기준 (%, 추정)" }), "7");
     await userEvent.click(form.getByRole("button", { name: "저장" }));
     expect(sent).toEqual([
       { method: "PUT", path: `/${MAC}/report-condition`, body: { minInterval: 30, maxInterval: 300, changeThreshold: 7 } },
@@ -324,18 +620,18 @@ describe("DeviceControlPage: 설정", () => {
     expect(group("대기전력 차단").queryByText("장비에 보냈습니다")).not.toBeInTheDocument();
     act(() => stream().send("device", status({ power: 1 })));
     expect(form.getByText("장비에 보냈습니다")).toBeInTheDocument();
-    expect(form.getByRole("textbox", { name: "최소 간격" })).toHaveValue("30");
+    expect(form.getByRole("textbox", { name: "최소 간격 (초)" })).toHaveValue("30");
   });
 
   it("보고 조건이 범위를 벗어나면 보내지 않고 그 입력 옆에 이유를 보인다", async () => {
     settings = () => json(SETTINGS);
     await open();
     const form = group("보고 조건");
-    const min = form.getByRole("textbox", { name: "최소 간격" });
+    const min = form.getByRole("textbox", { name: "최소 간격 (초)" });
     await type(min, "601");
     await userEvent.click(form.getByRole("button", { name: "저장" }));
     expect(min).toHaveAccessibleDescription(/최대 간격보다/);
-    expect(form.getByRole("textbox", { name: "최대 간격" })).toBeValid();
+    expect(form.getByRole("textbox", { name: "최대 간격 (초)" })).toBeValid();
     expect(sent).toEqual([]);
 
     await type(min, "60");
@@ -348,8 +644,8 @@ describe("DeviceControlPage: 설정", () => {
     await open();
     const form = group("대기전력 차단");
     await userEvent.click(form.getByRole("switch", { name: "사용" }));
-    await type(form.getByRole("textbox", { name: "기준 전력 (W)" }), "5.5");
-    await type(form.getByRole("textbox", { name: "지연" }), "60");
+    await type(form.getByRole("textbox", { name: "기준 전력 (W, 추정)" }), "5.5");
+    await type(form.getByRole("textbox", { name: "지연 (초, 추정)" }), "60");
     await userEvent.click(form.getByRole("button", { name: "저장" }));
     expect(sent).toEqual([{ method: "PUT", path: `/${MAC}/standby-cutoff`, body: { enabled: true, thresholdWatts: 5.5, delay: 60 } }]);
   });
@@ -363,7 +659,7 @@ describe("DeviceControlPage: 설정", () => {
     await type(form.getByRole("textbox", { name: "시" }), "3");
     await type(form.getByRole("textbox", { name: "분" }), "5");
     await type(form.getByRole("textbox", { name: "초" }), "0");
-    await type(form.getByRole("textbox", { name: "다시 켤 때까지의 초" }), "10");
+    await type(form.getByRole("textbox", { name: "다시 켤 때까지의 초 (추정)" }), "10");
     await userEvent.click(form.getByRole("button", { name: "저장" }));
     expect(sent).toEqual([
       {
@@ -380,10 +676,10 @@ describe("DeviceControlPage: 설정", () => {
     await type(form.getByRole("textbox", { name: "시" }), "3");
     await type(form.getByRole("textbox", { name: "분" }), "0");
     await type(form.getByRole("textbox", { name: "초" }), "55");
-    await type(form.getByRole("textbox", { name: "다시 켤 때까지의 초" }), "10");
+    await type(form.getByRole("textbox", { name: "다시 켤 때까지의 초 (추정)" }), "10");
     await userEvent.click(form.getByRole("button", { name: "저장" }));
     expect(form.getByText("요일을 하나 이상 고르세요.")).toBeInTheDocument();
-    expect(form.getByRole("textbox", { name: "다시 켤 때까지의 초" })).toHaveAccessibleDescription(/60보다/);
+    expect(form.getByRole("textbox", { name: "다시 켤 때까지의 초 (추정)" })).toHaveAccessibleDescription(/60보다/);
     expect(sent).toEqual([]);
   });
 
@@ -441,9 +737,9 @@ describe("DeviceControlPage: 묶음 규격", () => {
   const follows = (a: Element, b: Element) => (a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0;
 
   it.each([
-    ["전원", ["전원 재투입 단위는 약 1초입니다(B540에서 확인)"], "실행", "재부팅"],
+    ["전원", [], "실행", "재부팅"],
     ["보고 조건", ["서버가 마지막으로 보낸 값이며 장비의 현재 값과 다를 수 있습니다"], "저장", null],
-    ["대기전력 차단", ["서버가 마지막으로 보낸 값이며 장비의 현재 값과 다를 수 있습니다", "값의 의미와 단위는 추정입니다"], "저장", null],
+    ["대기전력 차단", ["서버가 마지막으로 보낸 값이며 장비의 현재 값과 다를 수 있습니다"], "저장", null],
     ["예약 전원 재투입", ["서버가 마지막으로 보낸 값이며 장비의 현재 값과 다를 수 있습니다"], "저장", "삭제"],
   ])("%s 묶음은 제목·안내·입력·버튼 순서이고 주 버튼만 채운 버튼이다", async (name, notes, main, other) => {
     await open();
@@ -488,7 +784,8 @@ describe("DeviceControlPage: 제어할 수 없는 장비", () => {
   ])("%j 이면 모든 제어 버튼이 비활성이고 까닭을 보인다", async (overrides, reason) => {
     await open(status(overrides));
     expect(screen.getByText(reason)).toBeInTheDocument();
-    for (const button of screen.getAllByRole("button")) expect(button).toBeDisabled();
+    for (const name of SECTIONS) for (const button of group(name).getAllByRole("button")) expect(button).toBeDisabled();
+    expect(screen.getByRole("button", { name: "이름 변경" })).toBeEnabled();
     expect(group("전원").getByRole("switch", { name: "릴레이" })).toBeDisabled();
   });
 
