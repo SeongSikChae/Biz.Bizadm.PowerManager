@@ -16,5 +16,7 @@ namespace Biz.Bizadm.PowerManager.Core.Mqtt
         public const string Write = "w";
         public const string Change = "chg";
         public const string Reboot = "reb";
+        public const string Execute = "e";
+        public const string Read = "r";
     }
 }

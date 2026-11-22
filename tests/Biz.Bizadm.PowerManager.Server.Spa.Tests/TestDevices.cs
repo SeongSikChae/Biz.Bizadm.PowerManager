@@ -16,10 +16,16 @@ internal static class TestDevices
     /// mac(12자리 16진수 소문자)을 등록하고, ClientId <c>DAWONDNS-{mac}</c>·사용자명 <c>DAWONDNS-B540_W-{mac}</c>·발급 키를 돌려준다.
     /// </summary>
     public static async Task<TestDevice> RegisterAsync(WebApplication app, string mac)
+        => await RegisterAsync(app, mac, "B540_W");
+
+    /// <summary>
+    /// 모델을 정해 등록한다. 사용자명은 <c>DAWONDNS-{모델}-{mac}</c>이다.
+    /// </summary>
+    public static async Task<TestDevice> RegisterAsync(WebApplication app, string mac, string modelId)
     {
         DeviceRegistrationService.Result result = await app.Services.GetRequiredService<DeviceRegistrationService>()
-            .RegisterAsync(mac, "user@example.com/kakao", "B540_W", "DAWONDNS", CancellationToken.None);
-        return new TestDevice(mac, "DAWONDNS-" + mac, "DAWONDNS-B540_W-" + mac, result.MqttKey);
+            .RegisterAsync(mac, "user@example.com/kakao", modelId, "DAWONDNS", CancellationToken.None);
+        return new TestDevice(mac, "DAWONDNS-" + mac, $"DAWONDNS-{modelId}-{mac}", result.MqttKey);
     }
 
     /// <summary>

@@ -20,6 +20,8 @@ public sealed class TimeSyncResponseTests
 {
     private const string DeviceKey = "DAWONDNS-M130-W-3a0000000201";
     private const string TimeSyncTopic = "dwd.v1/" + DeviceKey + "/iot-server/timesync/json";
+    private const string NotifyTopic = "dwd.v1/" + DeviceKey + "/iot-server/notify/json";
+    private const string RelayOnJson = """{"sid":"1","msg":{"o":"n","e":[{"n":"/100/0/31","sv":"true"}]}}""";
     private const string DownlinkTopic = "dwd.v1/iot-server/" + DeviceKey;
     private const string DownlinkFilter = DownlinkTopic + "/#";
     private const string MarkerTopic = DownlinkTopic + "/marker";
@@ -138,6 +140,12 @@ public sealed class TimeSyncResponseTests
     }
 
     /// <summary>
+    /// 릴레이 상태를 먼저 보고해, tisyn 뒤에 서버가 릴레이 읽기(r)를 보내지 않게 한다(device-control D019).
+    /// </summary>
+    private static Task ReportRelayAsync(IMqttClient device)
+        => device.PublishStringAsync(NotifyTopic, RelayOnJson, MqttQualityOfServiceLevel.AtLeastOnce);
+
+    /// <summary>
     /// 장치가 tisyn을 보내면 와일드카드로 구독한 클라이언트가 받은 응답 하나(표시 메시지 제외)를 돌려준다.
     /// </summary>
     private static async Task<List<MqttApplicationMessage>> SendTimeSyncAsync(WebApplication app, AppConfiguration configuration, string requestPayload)
@@ -149,6 +157,7 @@ public sealed class TimeSyncResponseTests
 
         using IMqttClient device = new MqttClientFactory().CreateMqttClient();
         await device.ConnectAsync(await ClientOptionsAsync(app, configuration, DeviceClientId));
+        await ReportRelayAsync(device);
         await device.PublishStringAsync(TimeSyncTopic, requestPayload, MqttQualityOfServiceLevel.AtLeastOnce);
 
         await WaitUntilAsync(() => receiver.Messages.Any(m => m.Topic == DownlinkTopic), "시간 동기 응답이 오지 않았다.");
@@ -253,6 +262,7 @@ public sealed class TimeSyncResponseTests
         using (IMqttClient device = new MqttClientFactory().CreateMqttClient())
         {
             await device.ConnectAsync(await ClientOptionsAsync(app, configuration, DeviceClientId));
+            await ReportRelayAsync(device);
             await device.PublishStringAsync(TimeSyncTopic, """{"sid":"6","msg":{"o":"tisyn","e":[]}}""", MqttQualityOfServiceLevel.AtLeastOnce);
 
             await WaitForLogsAsync(

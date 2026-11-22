@@ -20,10 +20,12 @@ namespace Biz.Bizadm.PowerManager.Server.Spa.Mqtt
     /// 전달 문제를 가리려고 클라이언트의 구독·구독 해제와, 서버 → 장치 메시지가 어느 클라이언트 큐에 들어갔는지·구독자가 없었는지를 로그로 남긴다
     /// (구독·전달 동작은 바꾸지 않는다).
     /// 장비가 나뉜 패킷을 처리하지 못하므로 두 엔드포인트 모두 MQTT 패킷을 한 번에 쓴다(<see cref="BuildServerOptions"/>).
+    /// 접속·끊김과 장치 → 서버 메시지는 <see cref="DeviceStateStore"/>에, 서버 → 장치 메시지의 전달 결과는 <see cref="DownlinkDeliveryTracker"/>에도 알린다.
     /// 서버가 주입한 메시지(<c>CustomSessionItems</c> 없이 주입한 것, 예: tisyn 응답)는 해석 불가 토픽 로그를 남기지 않는다(<see cref="IsInjected"/>).
     /// </summary>
     public sealed class MqttBrokerHostedService(AppConfiguration configuration, IDeviceMessageHandler handler,
-        DeviceRegistrationService registrations, MqttServerAccessor accessor, ILogger<MqttBrokerHostedService> logger)
+        DeviceRegistrationService registrations, MqttServerAccessor accessor, DeviceStateStore states, DeviceRelayReader relayReader,
+        DownlinkDeliveryTracker deliveries, ILogger<MqttBrokerHostedService> logger)
         : IHostedService, IAsyncDisposable
     {
         /// <summary>
@@ -72,6 +74,8 @@ namespace Biz.Bizadm.PowerManager.Server.Spa.Mqtt
             server = new MqttServerFactory().CreateMqttServer(BuildServerOptions(c, certificate));
             serverSessionItems = server.ServerSessionItems;
             server.InterceptingPublishAsync += OnPublishAsync;
+            server.ClientConnectedAsync += OnClientConnectedAsync;
+            server.ClientDisconnectedAsync += OnClientDisconnectedAsync;
             server.ValidatingConnectionAsync += OnValidatingConnectionAsync;
             server.InterceptingSubscriptionAsync += OnSubscriptionAsync;
             server.InterceptingUnsubscriptionAsync += OnUnsubscriptionAsync;
@@ -97,6 +101,8 @@ namespace Biz.Bizadm.PowerManager.Server.Spa.Mqtt
                 server = null;
                 accessor.Server = null;
                 current.InterceptingPublishAsync -= OnPublishAsync;
+                current.ClientConnectedAsync -= OnClientConnectedAsync;
+                current.ClientDisconnectedAsync -= OnClientDisconnectedAsync;
                 current.ValidatingConnectionAsync -= OnValidatingConnectionAsync;
                 current.InterceptingSubscriptionAsync -= OnSubscriptionAsync;
                 current.InterceptingUnsubscriptionAsync -= OnUnsubscriptionAsync;
@@ -145,9 +151,35 @@ namespace Biz.Bizadm.PowerManager.Server.Spa.Mqtt
             e.ReasonCode = reasonCode;
         }
 
-        // 아래 네 처리기는 MQTTnet이 예외를 잡지 않고 부르므로(전달 이벤트의 예외는 남은 구독자 전달을, 구독 이벤트의 예외는
+        // 아래 여섯 처리기는 MQTTnet이 예외를 잡지 않고 부르므로(전달 이벤트의 예외는 남은 구독자 전달을, 구독 이벤트의 예외는
         // SUBSCRIBE·UNSUBSCRIBE 처리를 막는다) 예외를 밖으로 내보내지 않는다. 구독 해제 이벤트는 브로커의 잠금 안에서 불리므로
         // 모두 await 없이 동기로 끝낸다. 이벤트 인자의 처리 여부 속성은 바꾸지 않는다.
+
+        private Task OnClientConnectedAsync(ClientConnectedEventArgs e)
+        {
+            try
+            {
+                states.Connected(e.ClientId, e.RemoteEndPoint?.ToString());
+            }
+            catch (Exception ex)
+            {
+                TryLogHandlerError(ex, nameof(OnClientConnectedAsync));
+            }
+            return Task.CompletedTask;
+        }
+
+        private Task OnClientDisconnectedAsync(ClientDisconnectedEventArgs e)
+        {
+            try
+            {
+                states.Disconnected(e.ClientId, e.RemoteEndPoint?.ToString(), e.DisconnectType);
+            }
+            catch (Exception ex)
+            {
+                TryLogHandlerError(ex, nameof(OnClientDisconnectedAsync));
+            }
+            return Task.CompletedTask;
+        }
 
         private Task OnSubscriptionAsync(InterceptingSubscriptionEventArgs e)
         {
@@ -187,6 +219,7 @@ namespace Biz.Bizadm.PowerManager.Server.Spa.Mqtt
                 string topic = e.ApplicationMessage.Topic;
                 if (!e.IsDropped && DeviceTopic.IsToDevice(topic))
                 {
+                    deliveries.Enqueued(e.SenderClientId, e.ReceiverClientId, e.ApplicationMessage);
                     logger.LogInformation("Downlink message enqueued: sender={SenderClientId}, receiver={ReceiverClientId}, topic={Topic}",
                         e.SenderClientId, e.ReceiverClientId, topic);
                 }
@@ -208,7 +241,10 @@ namespace Biz.Bizadm.PowerManager.Server.Spa.Mqtt
             {
                 string topic = e.ApplicationMessage.Topic;
                 if (DeviceTopic.IsToDevice(topic))
+                {
+                    deliveries.NotConsumed(e.SenderId, e.ApplicationMessage);
                     logger.LogWarning("Downlink message not consumed: sender={SenderClientId}, topic={Topic}", e.SenderId, topic);
+                }
             }
             catch (Exception ex)
             {
@@ -253,11 +289,13 @@ namespace Biz.Bizadm.PowerManager.Server.Spa.Mqtt
             {
                 if (topic.Kind == DeviceTopicKind.Lwt)
                 {
+                    ApplyToState(e.ClientId, topic, null);
                     await handler.OfflineAsync(topic, e.CancellationToken);
                     return;
                 }
 
                 MqttEnvelope? envelope = TryDeserialize(topicName, e.ApplicationMessage.Payload);
+                ApplyToState(e.ClientId, topic, envelope);
                 if (envelope is null)
                     return;
 
@@ -279,6 +317,22 @@ namespace Biz.Bizadm.PowerManager.Server.Spa.Mqtt
             {
                 // 핸들러 예외가 브로커 연결 처리로 번지지 않게 로그만 남긴다.
                 logger.LogError(ex, "Device message handling failed: {Topic}", topicName);
+            }
+        }
+
+        /// <summary>
+        /// 장비의 메시지를 상태 저장소에 반영하고, 필요하면 릴레이 읽기를 시작한다. 실패해도 메시지 분배를 막지 않는다.
+        /// </summary>
+        private void ApplyToState(string? clientId, DeviceTopic topic, MqttEnvelope? envelope)
+        {
+            try
+            {
+                if (states.ApplyMessage(clientId, topic, envelope) is RelayReadRequest request)
+                    relayReader.Start(request);
+            }
+            catch (Exception ex)
+            {
+                TryLogHandlerError(ex, nameof(ApplyToState));
             }
         }
 

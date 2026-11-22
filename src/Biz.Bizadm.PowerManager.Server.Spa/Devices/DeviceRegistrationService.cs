@@ -7,7 +7,8 @@ namespace Biz.Bizadm.PowerManager.Server.Spa.Devices
     /// <summary>
     /// 장치 등록과 발급 키 조회. 컨트롤러와 MQTT 브로커가 함께 쓴다.
     /// </summary>
-    public sealed class DeviceRegistrationService(IDbContextFactory<PowerManagerDbContext> factory, TimeProvider timeProvider)
+    public sealed class DeviceRegistrationService(IDbContextFactory<PowerManagerDbContext> factory, TimeProvider timeProvider,
+        DeviceStateStore states)
     {
         /// <summary>
         /// 등록 결과. <see cref="Created"/>는 이번 요청으로 키를 새로 발급했는지다.
@@ -48,6 +49,7 @@ namespace Biz.Bizadm.PowerManager.Server.Spa.Devices
             await using PowerManagerDbContext db = await factory.CreateDbContextAsync(cancellationToken);
             DeviceRegistration? device = await db.Devices.SingleOrDefaultAsync(d => d.Mac == mac, cancellationToken);
             bool created = device is null;
+            bool statusChanged = created;
             if (device is null)
             {
                 device = new DeviceRegistration
@@ -67,12 +69,17 @@ namespace Biz.Bizadm.PowerManager.Server.Spa.Devices
                 if (!string.IsNullOrEmpty(userId))
                     device.UserId = userId;
                 if (!string.IsNullOrEmpty(modelId))
+                {
+                    statusChanged = device.ModelId != modelId;
                     device.ModelId = modelId;
+                }
                 if (!string.IsNullOrEmpty(company))
                     device.Company = company;
                 device.LastRequestedAt = now;
             }
             await db.SaveChangesAsync(cancellationToken);
+            if (statusChanged)
+                states.NotifyChanged(mac);
             return new Result(device.MqttKey, created);
         }
     }

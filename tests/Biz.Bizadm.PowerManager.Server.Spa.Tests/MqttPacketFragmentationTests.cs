@@ -24,6 +24,8 @@ public sealed class MqttPacketFragmentationTests
     private const string SubscriberMac = "3a0000000411";
     private const string DeviceKey = "DAWONDNS-M130-W-3a0000000401";
     private const string TimeSyncTopic = "dwd.v1/" + DeviceKey + "/iot-server/timesync/json";
+    private const string NotifyTopic = "dwd.v1/" + DeviceKey + "/iot-server/notify/json";
+    private const string RelayOnJson = """{"sid":"1","msg":{"o":"n","e":[{"n":"/100/0/31","sv":"true"}]}}""";
     private const string DownlinkTopic = "dwd.v1/iot-server/" + DeviceKey;
     private const string TimeSyncJson = """{"sid":"0","msg":{"o":"tisyn","e":[]}}""";
     private const string PfxPassword = "test-password";
@@ -102,6 +104,8 @@ public sealed class MqttPacketFragmentationTests
                     .WithProtocolVersion(MqttProtocolVersion.V310)
                     .WithTimeout(Timeout)
                     .Build(), cts.Token);
+                // 릴레이 상태를 먼저 보고해, tisyn 뒤에 서버가 릴레이 읽기(r)를 보내지 않게 한다(device-control D019).
+                await device.PublishStringAsync(NotifyTopic, RelayOnJson, MqttQualityOfServiceLevel.AtLeastOnce, cancellationToken: cts.Token);
                 await device.PublishStringAsync(TimeSyncTopic, TimeSyncJson, MqttQualityOfServiceLevel.AtMostOnce, cancellationToken: cts.Token);
 
                 byte[] publish = await ReadPacketAsync(ssl, cts.Token);

@@ -2,7 +2,7 @@
 
 파일: src/Biz.Bizadm.PowerManager.Server.Spa/Devices/AdminDeviceResponse.cs, src/Biz.Bizadm.PowerManager.Server.Spa/Devices/AdminDevicesController.cs, tests/Biz.Bizadm.PowerManager.Server.Spa.Tests/AdminDeviceEndpointTests.cs, src/Biz.Bizadm.PowerManager.Client/src/features/devices/devicesApi.ts, src/Biz.Bizadm.PowerManager.Client/src/app/store.ts, src/Biz.Bizadm.PowerManager.Client/src/features/devices/deviceList.ts, src/Biz.Bizadm.PowerManager.Client/src/features/devices/deviceList.test.ts, src/Biz.Bizadm.PowerManager.Client/src/features/devices/DevicesPage.tsx, src/Biz.Bizadm.PowerManager.Client/src/features/devices/DevicesPage.test.tsx, src/Biz.Bizadm.PowerManager.Client/src/App.test.tsx
 
-관리 화면의 장비 목록. 서버의 관리용 목록 API(`GET /api/admin/devices`)와 클라이언트 장비 목록 화면(관리 화면 `/`)이다. 화면 틀·디자인 기준과 관리 포트 제한은 admin-ui 기능(`docs/features/admin-ui.md`)을 따른다.
+관리 화면의 장비 목록. 서버의 관리용 목록 API(`GET /api/admin/devices`)와 클라이언트 장비 목록 화면(관리 화면 `/devices`)이다. 화면 틀·디자인 기준과 관리 포트 제한은 admin-ui 기능(`docs/features/admin-ui.md`)을 따른다.
 
 ## 요구(완료 조건)
 
@@ -14,7 +14,7 @@
 
 화면:
 
-- R4. 관리 화면(`/`)은 앱 틀(admin-ui R3: 1440px 나란히, 390px 사이드바 위로 쌓임) 안에 장비 목록을 보이며, 글꼴은 admin-ui R2(한글 Noto Sans KR 웹 글꼴 포함)를 따른다. 본문 머리에는 제목 "장비", 등록 대수("서버에 등록된 장비 N대"), "새로고침" 버튼이 있다. N은 검색과 관계없이 서버가 준 전체 대수이며, 받은 목록이 아직 없을 때(R10)는 표시하지 않는다.
+- R4. 장비 목록 화면(`/devices`)은 앱 틀(admin-ui R3: 1440px 나란히, 390px 사이드바 위로 쌓임) 안에 장비 목록을 보이며, 글꼴은 admin-ui R2(한글 Noto Sans KR 웹 글꼴 포함)를 따른다. 본문 머리에는 제목 "장비", 등록 대수("서버에 등록된 장비 N대"), "새로고침" 버튼이 있다. N은 검색과 관계없이 서버가 준 전체 대수이며, 받은 목록이 아직 없을 때(R10)는 표시하지 않는다.
 - R5. 표의 열은 MAC, 모델, 제조사, 사용자, 등록, 마지막 요청 순서다. MAC은 고정폭 글꼴로 서버 값 그대로(소문자 12자리) 표시하고, 빈 값(모델·제조사·사용자)은 "—"로 표시한다.
 - R6. 등록·마지막 요청 시각은 브라우저 시간대의 `YYYY-MM-DD HH:mm`이다. 마지막 요청은 그 위에 상대 시간을 함께 보이며, 1분 미만이거나 미래 시각이면 "방금", 60분 미만 "N분 전", 24시간 미만 "N시간 전", 그 이상 "N일 전"이다(N은 내림).
 - R7. 기본 정렬은 마지막 요청 최근 순이다. 등록·마지막 요청 열 머리를 누르면 그 열의 최근 순(내림차순)으로, 같은 열을 다시 누르면 방향이 바뀐다. 값이 같으면 MAC 오름차순이다. 정렬 중인 열과 방향을 표시한다(`aria-sort` 포함).
@@ -32,3 +32,4 @@
 | 날짜 | 작업 | 바꾼 요구 | 변경 폴더 |
 |---|---|---|---|
 | 2026-11-19 | device-list-ui | R1~R13 처음 작성(장비 목록 API·화면 신설, #17) | docs/specs/device-list-ui/ |
+| 2026-11-22 | device-control | R4 바꿈(화면 경로 `/`에서 `/devices`로) | docs/specs/device-control/ |
