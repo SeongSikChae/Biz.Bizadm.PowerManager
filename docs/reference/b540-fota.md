@@ -1,7 +1,7 @@
 # B540 FOTA (펌웨어 무선 업데이트)
 
-- 작성: 2026-11-03 (KST), 갱신: 2026-11-20(FOTA URL→요청 경로 생성을 슬롯 B 디스어셈블로 확정, 2~5절), 2026-11-20(슬롯 접미사 선택 분기·다원 서버 서빙 확인, 3~5절, `docs/specs/dawon-fake-device-fota-path/`)
-- 근거: B540 플래시 덤프의 정적 문자열, 기존 부트·슬롯 분석([부트 분석](b540-rea-boot.md), [초기 분석](b540-rea-initial.md)), 2026-11-20 슬롯 B(user2) Xtensa 디스어셈블(`xtensa-lx106-elf-objdump`, 분석 폴더는 `docs/specs/b540-fota-path/`), 2026-11-20 다원 FOTA 서버에서 접미사별 경로를 직접 받아 덤프와 바이트 비교. 실제 장치에서의 업데이트 수행은 관찰하지 않았다.
+- 작성: 2026-11-03 (KST), 갱신: 2026-11-20(FOTA URL→요청 경로 생성을 슬롯 B 디스어셈블로 확정, 2~5절), 2026-11-20(슬롯 접미사 선택 분기·다원 서버 서빙 확인, 3~5절, `docs/feature/fake-device/R01_가짜_장비/T01_03_FOTA_요청을_슬롯_접미사_경로로.md`)
+- 근거: B540 플래시 덤프의 정적 문자열, 기존 부트·슬롯 분석([부트 분석](b540-rea-boot.md), [초기 분석](b540-rea-initial.md)), 2026-11-20 슬롯 B(user2) Xtensa 디스어셈블(`xtensa-lx106-elf-objdump`, 분석 기록은 `docs/feature/fake-device/R01_가짜_장비/T01_02_B540_FOTA_요청_경로_분석.md`), 2026-11-20 다원 FOTA 서버에서 접미사별 경로를 직접 받아 덤프와 바이트 비교. 실제 장치에서의 업데이트 수행은 관찰하지 않았다.
 - 표기: **관찰**, **추정**, **미확인**
 - 관련 문서: [MQTT 토픽](b540-mqtt-topic.md), [REST API](b540-rest-api.md), [TCP 설정 수신](b540-tcp-config.md)
 
@@ -32,7 +32,7 @@
 
 ## 3. 업데이트 흐름
 
-2026-11-20 슬롯 B(user2, `1.01.34`) 디스어셈블로 URL 파싱·요청 생성을 확인했다(아래 함수 주소는 참 링크 주소 = 파일 오프셋 + `0x40200000`. 분석 환경·회차는 `docs/specs/b540-fota-path/`).
+2026-11-20 슬롯 B(user2, `1.01.34`) 디스어셈블로 URL 파싱·요청 생성을 확인했다(아래 함수 주소는 참 링크 주소 = 파일 오프셋 + `0x40200000`. 분석 환경·회차는 `docs/feature/fake-device/R01_가짜_장비/T01_02_B540_FOTA_요청_경로_분석.md`).
 
 1. **트리거**(관찰): MQTT 쓰기(`Set_UpgradeResourceData` `0x402c924c`) 또는 TCP 설정(`LFota_*`). 받은 리소스 값(문자열)을 그대로 URL로 `UpdateUrlParser`에 넘긴다.
 2. **URL 파싱**(관찰, `UpdateUrlParser` `0x402c8f80`): URL 하나를 스킴·호스트·포트·경로로 분해해 FOTA 컨텍스트(전역 `0x3fff1618`)의 버퍼에 넣는다 — host `+0x138`(`0x3fff1750`), path `+0x19d`(`0x3fff17b5`), port 문자열 `+0x202`(`0x3fff181a`, 없으면 기본 `80`). 구분자 `//`·`:`·`/`를 쓴다. path에는 **경로만** 들어가고 스킴·호스트·포트는 뺀다. (`AtoZParser` `0x402c8d4c`는 거의 같은 변형.) TCP 설정 파서(`0x4029d1a5`, `LFota_*` 키)는 키별 값을 같은 컨텍스트 버퍼에 strncpy해 같은 구조로 수렴한다 — `LFota_Url`→host 필드(`0x3fff1750`), `LFota_Addr`→path 필드(`0x3fff17b5`), `LFota_Port`→port(`0x3fff181a`), `LFota_Version`→version(`0x3fff1820`)(관찰: 키→버퍼 strncpy와 버퍼 역할을 GET 빌더 인자 `a4`=path·`a6`=host로 확인). 키 이름과 실제 역할이 반대다(`LFota_Url` 값이 Host로, `LFota_Addr` 값이 경로로 간다) — 2절의 추정 의미(§2)와 어긋나므로 2절 의미 추정은 이 관찰로 정정한다.

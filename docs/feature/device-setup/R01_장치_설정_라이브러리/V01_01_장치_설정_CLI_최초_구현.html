@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>V01_01 장치 설정 CLI 최초 구현</title>
+<style>
+  body { font-family: "Malgun Gothic", sans-serif; max-width: 960px; margin: 32px auto; padding: 0 16px; color: #1f2933; line-height: 1.6; }
+  h1 { font-size: 22px; margin-bottom: 12px; }
+  h2 { font-size: 16px; margin-top: 32px; border-bottom: 1px solid #d9dee4; padding-bottom: 4px; }
+  table { border-collapse: collapse; width: 100%; font-size: 14px; }
+  th, td { border: 1px solid #d9dee4; padding: 6px 10px; text-align: left; vertical-align: top; }
+  th { background: #f3f5f7; white-space: nowrap; }
+  .pass { color: #0b7a3b; font-weight: 600; white-space: nowrap; }
+  .fail { color: #b42318; font-weight: 600; white-space: nowrap; }
+  .skip { color: #8a6100; font-weight: 600; white-space: nowrap; }
+  .summary { border: 1px solid #d9dee4; border-left: 6px solid #0b7a3b; background: #f7faf8; padding: 12px 16px; margin: 12px 0 20px; }
+  .summary.bad { border-left-color: #b42318; background: #fdf6f5; }
+  .summary.warn { border-left-color: #8a6100; background: #fdfaf2; }
+  .summary p { margin: 4px 0; }
+  .counts span { display: inline-block; margin-right: 16px; }
+  .meta { width: auto; font-size: 13px; color: #52606d; }
+  .meta th, .meta td { border: none; padding: 2px 12px 2px 0; background: none; }
+  details { border: 1px solid #d9dee4; border-radius: 4px; margin: 8px 0; padding: 0 12px; }
+  details[open] { padding-bottom: 8px; }
+  summary { cursor: pointer; padding: 8px 0; font-size: 14px; }
+  summary b { margin-right: 8px; }
+  details p, details li { font-size: 14px; }
+</style>
+</head>
+<body>
+
+<h1>V01_01 장치 설정 CLI 최초 구현</h1>
+
+<div class="summary warn">
+  <p><strong>실장비 전체 명령 결과는 기록에 있으나 단위 테스트 실행 결과(건수)는 기록되지 않아 일부가 미확인이다.</strong></p>
+  <p class="counts"><span class="pass">통과 3</span><span class="fail">미달 0</span><span class="skip">미확인 9</span></p>
+  <p>정해야 할 것: 없음</p>
+</div>
+
+<table class="meta">
+  <tr><th>태스크</th><td>T01_01</td></tr>
+  <tr><th>확인한 날짜</th><td>2026-11-11</td></tr>
+  <tr><th>확인한 커밋</th><td><code>aaef457</code>~<code>5863935</code>(#6)</td></tr>
+  <tr><th>차수</th><td>1</td></tr>
+  <tr><th>복구</th><td><code>docs/cli/0003-device-config-개발.md</code>(지움. <code>15dc357</code>에 있음) 단위 U8 결과</td></tr>
+</table>
+
+<h2>판정</h2>
+<table>
+  <tr><th>ID</th><th>기준</th><th>결과</th><th>근거</th></tr>
+  <tr><td>R01-A1</td><td>흐름 순서와 결과에 관계없는 PC Wi-Fi 복구</td><td class="skip">미확인</td><td>개발 문서에 모의 테스트 목록만 있고 실행 결과가 적혀 있지 않다.</td></tr>
+  <tr><td>R01-A2</td><td>미구현 OS 폴백과 그 밖의 예외 전파</td><td class="skip">미확인</td><td>위와 같음.</td></tr>
+  <tr><td>R01-A3</td><td>핸드셰이크·프레임 처리</td><td class="skip">미확인</td><td>위와 같음.</td></tr>
+  <tr><td>R01-A8</td><td>로그·예외에 비밀 값 없음</td><td class="skip">미확인</td><td>실장비 로그에서 <code>***</code> 가림은 확인됐으나 예외 메시지 검사의 실행 결과는 기록이 없다.</td></tr>
+  <tr><td>R01-A9</td><td>시간 초과·연결 종료 예외와 남은 명령 미실행</td><td class="skip">미확인</td><td>모의 테스트 실행 결과 기록 없음.</td></tr>
+  <tr><td>R02-A1</td><td>종료 코드 1·2·3·0</td><td class="skip">미확인</td><td>U7 검증 계획(인자 없음 1, 설정 오류 2 등)만 있고 결과 기록이 없다.</td></tr>
+  <tr><td>R02-A2</td><td><code>Device</code> 기본값과 필수 항목 검사</td><td class="skip">미확인</td><td>위와 같음.</td></tr>
+  <tr><td>R02-A3</td><td><code>Settings</code> 검사</td><td class="skip">미확인</td><td>위와 같음(그때는 <code>Protocol</code>·<code>MqttKey</code>가 없었다).</td></tr>
+  <tr><td>R02-A4</td><td>평문 비밀 값이 <code>DEKENC:</code>로 다시 쓰임</td><td class="skip">미확인</td><td>위와 같음.</td></tr>
+  <tr><td>R01-A4</td><td>명령마다 표의 송신·응답, <code>Reboot</code>·<code>TestFactoryReset</code>은 연결 끊김에도 성공</td><td class="pass">통과</td><td>U8(2026-11-11, B540 실장비 1)에서 명령을 하나씩 실행. <code>Reboot</code>·<code>TestFactoryReset</code>은 응답·연결 종료 없이 시간 초과였고 약 40초 뒤 재접속 정상이어서 경고 후 성공으로 정함.</td></tr>
+  <tr><td>R01-A5</td><td><code>ConnectAp</code> 한 연결 순서와 응답 판정</td><td class="pass">통과</td><td>U8에서 설정 JSON·<code>connectap</code> 모두 <code>respone: OK</code>, 로그의 <code>pass</code>·<code>mqtt_key</code>는 <code>***</code>.</td></tr>
+  <tr><td>R02-A5</td><td>콘솔 번호로 어댑터·AP·Wi-Fi 선택, 표준 입력이 닫히면 종료 코드 3</td><td class="pass">통과</td><td>U8 실측(Windows 콘솔): 입력 대기 중 Ctrl+C로 <code>ReadLine</code>이 null을 돌려 <code>Console input closed</code> 로그와 함께 끝남.</td></tr>
+</table>
+
+<h2>자세히</h2>
+<details>
+  <summary><b>R01-A1</b> 흐름 순서와 결과에 관계없는 PC Wi-Fi 복구</summary>
+  <p>개발 문서에 모의 테스트 목록만 있고 실행 결과가 적혀 있지 않다.</p>
+</details>
+<details>
+  <summary><b>R01-A2</b> 미구현 OS 폴백과 그 밖의 예외 전파</summary>
+  <p>위와 같음.</p>
+</details>
+<details>
+  <summary><b>R01-A3</b> 핸드셰이크·프레임 처리</summary>
+  <p>위와 같음.</p>
+</details>
+<details>
+  <summary><b>R01-A8</b> 로그·예외에 비밀 값 없음</summary>
+  <p>실장비 로그에서 <code>***</code> 가림은 확인됐으나 예외 메시지 검사의 실행 결과는 기록이 없다.</p>
+</details>
+<details>
+  <summary><b>R01-A9</b> 시간 초과·연결 종료 예외와 남은 명령 미실행</summary>
+  <p>모의 테스트 실행 결과 기록 없음.</p>
+</details>
+<details>
+  <summary><b>R02-A1</b> 종료 코드 1·2·3·0</summary>
+  <p>U7 검증 계획(인자 없음 1, 설정 오류 2 등)만 있고 결과 기록이 없다.</p>
+</details>
+<details>
+  <summary><b>R02-A2</b> <code>Device</code> 기본값과 필수 항목 검사</summary>
+  <p>위와 같음.</p>
+</details>
+<details>
+  <summary><b>R02-A3</b> <code>Settings</code> 검사</summary>
+  <p>위와 같음(그때는 <code>Protocol</code>·<code>MqttKey</code>가 없었다).</p>
+</details>
+<details>
+  <summary><b>R02-A4</b> 평문 비밀 값이 <code>DEKENC:</code>로 다시 쓰임</summary>
+  <p>위와 같음.</p>
+</details>
+<details>
+  <summary><b>R01-A4</b> 명령마다 표의 송신·응답, <code>Reboot</code>·<code>TestFactoryReset</code>은 연결 끊김에도 성공</summary>
+  <p>U8(2026-11-11, B540 실장비 1)에서 명령을 하나씩 실행. <code>Reboot</code>·<code>TestFactoryReset</code>은 응답·연결 종료 없이 시간 초과였고 약 40초 뒤 재접속 정상이어서 경고 후 성공으로 정함.</p>
+</details>
+<details>
+  <summary><b>R01-A5</b> <code>ConnectAp</code> 한 연결 순서와 응답 판정</summary>
+  <p>U8에서 설정 JSON·<code>connectap</code> 모두 <code>respone: OK</code>, 로그의 <code>pass</code>·<code>mqtt_key</code>는 <code>***</code>.</p>
+</details>
+<details>
+  <summary><b>R02-A5</b> 콘솔 번호로 어댑터·AP·Wi-Fi 선택, 표준 입력이 닫히면 종료 코드 3</summary>
+  <p>U8 실측(Windows 콘솔): 입력 대기 중 Ctrl+C로 <code>ReadLine</code>이 null을 돌려 <code>Console input closed</code> 로그와 함께 끝남.</p>
+</details>
+
+<h2>확인하지 못한 것</h2>
+<ul>
+  <li>그때의 <code>dotnet test</code> 실행 건수와 결과</li>
+  <li>App exe 종료 코드 시나리오의 실제 결과</li>
+</ul>
+
+<h2>환경과 남긴 것</h2>
+<details>
+  <summary>확인한 환경, 끝난 뒤의 상태</summary>
+<ul>
+  <li>Windows 작업 PC, B540 실장비 1(실제 값은 옮기지 않음)</li>
+</ul>
+</details>
+
+<h2>앞 차수</h2>
+<ul>
+  <li>없음</li>
+</ul>
+
+</body>
+</html>

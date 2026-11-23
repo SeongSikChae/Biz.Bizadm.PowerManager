@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>V04_03 장비명, 입력 단위, 로딩</title>
+<style>
+  body { font-family: "Malgun Gothic", sans-serif; max-width: 960px; margin: 32px auto; padding: 0 16px; color: #1f2933; line-height: 1.6; }
+  h1 { font-size: 22px; margin-bottom: 12px; }
+  h2 { font-size: 16px; margin-top: 32px; border-bottom: 1px solid #d9dee4; padding-bottom: 4px; }
+  table { border-collapse: collapse; width: 100%; font-size: 14px; }
+  th, td { border: 1px solid #d9dee4; padding: 6px 10px; text-align: left; vertical-align: top; }
+  th { background: #f3f5f7; white-space: nowrap; }
+  .pass { color: #0b7a3b; font-weight: 600; white-space: nowrap; }
+  .fail { color: #b42318; font-weight: 600; white-space: nowrap; }
+  .skip { color: #8a6100; font-weight: 600; white-space: nowrap; }
+  .summary { border: 1px solid #d9dee4; border-left: 6px solid #0b7a3b; background: #f7faf8; padding: 12px 16px; margin: 12px 0 20px; }
+  .summary.bad { border-left-color: #b42318; background: #fdf6f5; }
+  .summary.warn { border-left-color: #8a6100; background: #fdfaf2; }
+  .summary p { margin: 4px 0; }
+  .counts span { display: inline-block; margin-right: 16px; }
+  .meta { width: auto; font-size: 13px; color: #52606d; }
+  .meta th, .meta td { border: none; padding: 2px 12px 2px 0; background: none; }
+  details { border: 1px solid #d9dee4; border-radius: 4px; margin: 8px 0; padding: 0 12px; }
+  details[open] { padding-bottom: 8px; }
+  summary { cursor: pointer; padding: 8px 0; font-size: 14px; }
+  summary b { margin-right: 8px; }
+  details p, details li { font-size: 14px; }
+</style>
+</head>
+<body>
+
+<h1>V04_03 장비명, 입력 단위, 로딩</h1>
+
+<div class="summary">
+  <p><strong>모든 기준이 통과했다.</strong></p>
+  <p class="counts"><span class="pass">통과 6</span><span class="fail">미달 0</span><span class="skip">미확인 0</span></p>
+  <p>정해야 할 것: 없음</p>
+</div>
+
+<table class="meta">
+  <tr><th>태스크</th><td>T04_03</td></tr>
+  <tr><th>확인한 날짜</th><td>2026-11-22</td></tr>
+  <tr><th>확인한 커밋</th><td>기준점 <code>c5cad54</code> + 작업 트리(커밋 <code>797aaad</code>, #31·#32·#33)</td></tr>
+  <tr><th>차수</th><td>1</td></tr>
+  <tr><th>복구</th><td>옛 작업 기록 저장소 밖 작업 문서 <code>2026-11-22-device-name-and-units.md</code>의 검증 절</td></tr>
+</table>
+
+<h2>판정</h2>
+<table>
+  <tr><th>ID</th><th>기준</th><th>결과</th><th>근거</th></tr>
+  <tr><td>device-server/R01-A5·A6·A9</td><td>장비명 저장과 마이그레이션</td><td class="pass">통과</td><td><code>dotnet test --solution</code> 559건 중 558 통과·1 건너뜀의 <code>DeviceNameApiTests</code>·<code>AdminDeviceEndpointTests</code>·<code>DeviceStatusApiTests</code>.</td></tr>
+  <tr><td>R02-A1·A5·A8·A10</td><td>목록의 이름 열·검색·다시 읽기</td><td class="pass">통과</td><td><code>DevicesPage.test.tsx</code>·<code>deviceList.test.ts</code> 통과. 다시 읽지 않게 고치면 실패함을 확인.</td></tr>
+  <tr><td>R03-A4·A6·A8</td><td>대시보드 이름 순서·확인 창</td><td class="pass">통과</td><td><code>DashboardPage.test.tsx</code>·<code>RelayControl.test.tsx</code>·<code>format.test.ts</code> 통과.</td></tr>
+  <tr><td>R04-A18·A19·A22~A25</td><td>설정 묶음 로딩·실패·단위·이름 변경</td><td class="pass">통과</td><td><code>npm test</code> 10파일 217건 통과. 고장 낸 코드에서 해당 테스트가 실패함을 확인.</td></tr>
+  <tr><td>R04-A21·A22(위치)</td><td>응답 전후 묶음 좌표</td><td class="pass">통과</td><td>헤드리스 Edge에서 설정 응답을 늦춰 1440·800·390px 네 묶음 좌표가 응답 전·후 같음.</td></tr>
+  <tr><td>R04-A25·R03-A8(390px)</td><td>긴 장비명이 넘치지 않음</td><td class="pass">통과</td><td>390px, 공백 없는 30자에서 화면 밖 요소 0, scrollWidth 390 이하.</td></tr>
+</table>
+
+<h2>자세히</h2>
+<details>
+  <summary><b>device-server/R01-A5·A6·A9</b> 장비명 저장과 마이그레이션</summary>
+  <p><code>dotnet test --solution</code> 559건 중 558 통과·1 건너뜀의 <code>DeviceNameApiTests</code>·<code>AdminDeviceEndpointTests</code>·<code>DeviceStatusApiTests</code>.</p>
+</details>
+<details>
+  <summary><b>R02-A1·A5·A8·A10</b> 목록의 이름 열·검색·다시 읽기</summary>
+  <p><code>DevicesPage.test.tsx</code>·<code>deviceList.test.ts</code> 통과. 다시 읽지 않게 고치면 실패함을 확인.</p>
+</details>
+<details>
+  <summary><b>R03-A4·A6·A8</b> 대시보드 이름 순서·확인 창</summary>
+  <p><code>DashboardPage.test.tsx</code>·<code>RelayControl.test.tsx</code>·<code>format.test.ts</code> 통과.</p>
+</details>
+<details>
+  <summary><b>R04-A18·A19·A22~A25</b> 설정 묶음 로딩·실패·단위·이름 변경</summary>
+  <p><code>npm test</code> 10파일 217건 통과. 고장 낸 코드에서 해당 테스트가 실패함을 확인.</p>
+</details>
+<details>
+  <summary><b>R04-A21·A22(위치)</b> 응답 전후 묶음 좌표</summary>
+  <p>헤드리스 Edge에서 설정 응답을 늦춰 1440·800·390px 네 묶음 좌표가 응답 전·후 같음.</p>
+</details>
+<details>
+  <summary><b>R04-A25·R03-A8(390px)</b> 긴 장비명이 넘치지 않음</summary>
+  <p>390px, 공백 없는 30자에서 화면 밖 요소 0, scrollWidth 390 이하.</p>
+</details>
+
+<h2>확인하지 못한 것</h2>
+<ul>
+  <li>없음</li>
+</ul>
+
+<h2>환경과 남긴 것</h2>
+<details>
+  <summary>확인한 환경, 끝난 뒤의 상태</summary>
+<ul>
+  <li><code>npm run lint</code>·<code>npm run build</code> 통과, React ref 경고 없음</li>
+  <li>화면 확인은 실장비·운영 서버 없이 빌드한 화면과 가짜 API 응답으로</li>
+</ul>
+</details>
+
+<h2>앞 차수</h2>
+<ul>
+  <li>없음</li>
+</ul>
+
+</body>
+</html>

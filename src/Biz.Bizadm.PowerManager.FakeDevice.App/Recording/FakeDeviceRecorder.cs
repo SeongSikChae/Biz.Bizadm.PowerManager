@@ -19,7 +19,7 @@ namespace Biz.Bizadm.PowerManager.FakeDevice.App.Recording
 
     /// <summary>
     /// 보내고 받은 주고받음을 기록 폴더의 UTC 날짜별 JSONL 파일(<c>dawon-fake-device-yyyyMMdd.jsonl</c>)에 한 줄씩 덧붙인다.
-    /// 형식은 기준 spec dawon-fake-device R9를 따른다. 쓰기는 하나씩 직렬화하며, 실패해도 Error 로그만 남기고 계속한다.
+    /// 형식은 스펙 fake-device/R01-R9(docs/feature/fake-device)를 따른다. 쓰기는 하나씩 직렬화하며, 실패해도 Error 로그만 남기고 계속한다.
     /// </summary>
     internal sealed class FakeDeviceRecorder(string directory, TimeProvider timeProvider, ILogger<FakeDeviceRecorder> logger)
     {

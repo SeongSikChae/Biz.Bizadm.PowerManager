@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>V02_07 패킷 분할 끄기</title>
+<style>
+  body { font-family: "Malgun Gothic", sans-serif; max-width: 960px; margin: 32px auto; padding: 0 16px; color: #1f2933; line-height: 1.6; }
+  h1 { font-size: 22px; margin-bottom: 12px; }
+  h2 { font-size: 16px; margin-top: 32px; border-bottom: 1px solid #d9dee4; padding-bottom: 4px; }
+  table { border-collapse: collapse; width: 100%; font-size: 14px; }
+  th, td { border: 1px solid #d9dee4; padding: 6px 10px; text-align: left; vertical-align: top; }
+  th { background: #f3f5f7; white-space: nowrap; }
+  .pass { color: #0b7a3b; font-weight: 600; white-space: nowrap; }
+  .fail { color: #b42318; font-weight: 600; white-space: nowrap; }
+  .skip { color: #8a6100; font-weight: 600; white-space: nowrap; }
+  .summary { border: 1px solid #d9dee4; border-left: 6px solid #0b7a3b; background: #f7faf8; padding: 12px 16px; margin: 12px 0 20px; }
+  .summary.bad { border-left-color: #b42318; background: #fdf6f5; }
+  .summary.warn { border-left-color: #8a6100; background: #fdfaf2; }
+  .summary p { margin: 4px 0; }
+  .counts span { display: inline-block; margin-right: 16px; }
+  .meta { width: auto; font-size: 13px; color: #52606d; }
+  .meta th, .meta td { border: none; padding: 2px 12px 2px 0; background: none; }
+  details { border: 1px solid #d9dee4; border-radius: 4px; margin: 8px 0; padding: 0 12px; }
+  details[open] { padding-bottom: 8px; }
+  summary { cursor: pointer; padding: 8px 0; font-size: 14px; }
+  summary b { margin-right: 8px; }
+  details p, details li { font-size: 14px; }
+</style>
+</head>
+<body>
+
+<h1>V02_07 패킷 분할 끄기</h1>
+
+<div class="summary">
+  <p><strong>자동 테스트와 실장비 캡처 모두 PUBLISH가 TLS 레코드 하나로 나감을 확인했다.</strong></p>
+  <p class="counts"><span class="pass">통과 1</span><span class="fail">미달 0</span><span class="skip">미확인 0</span></p>
+  <p>정해야 할 것: 없음</p>
+</div>
+
+<table class="meta">
+  <tr><th>태스크</th><td>T02_07</td></tr>
+  <tr><th>확인한 날짜</th><td>2026-11-21</td></tr>
+  <tr><th>확인한 커밋</th><td>기준점 <code>7cb6e7f</code> + 작업 트리(커밋 <code>e5921f2</code>, #25)</td></tr>
+  <tr><th>차수</th><td>1</td></tr>
+  <tr><th>복구</th><td>옛 작업 기록 저장소 밖 작업 문서 <code>2026-11-21-mqtt-no-fragmentation.md</code>의 검증 절</td></tr>
+</table>
+
+<h2>판정</h2>
+<table>
+  <tr><th>ID</th><th>기준</th><th>결과</th><th>근거</th></tr>
+  <tr><td>R02-A14</td><td>두 엔드포인트 분할 끔, PUBLISH가 TLS 레코드 하나</td><td class="pass">통과</td><td><code>MqttPacketFragmentationTests</code> 2개 통과. 분할 끄기를 빼면 두 테스트 모두 실패("레코드 2개로 왔다: 23:74, 23:91"). 실장비 캡처(약 140초)에서 B540 <code>tisyn</code> 응답이 TLS 레코드 하나 176바이트.</td></tr>
+</table>
+
+<h2>자세히</h2>
+<details>
+  <summary><b>R02-A14</b> 두 엔드포인트 분할 끔, PUBLISH가 TLS 레코드 하나</summary>
+  <p><code>MqttPacketFragmentationTests</code> 2개 통과. 분할 끄기를 빼면 두 테스트 모두 실패("레코드 2개로 왔다: 23:74, 23:91"). 실장비 캡처(약 140초)에서 B540 <code>tisyn</code> 응답이 TLS 레코드 하나 176바이트.</p>
+</details>
+
+<h2>확인하지 못한 것</h2>
+<ul>
+  <li>없음</li>
+</ul>
+
+<h2>환경과 남긴 것</h2>
+<details>
+  <summary>확인한 환경, 끝난 뒤의 상태</summary>
+<ul>
+  <li><code>dotnet test</code> 합계 463, 실패 0, 건너뜀 1</li>
+  <li>Release 배포, 기존 파일은 스크래치에 백업, 서버 시작·중지는 사용자</li>
+</ul>
+</details>
+
+<h2>앞 차수</h2>
+<ul>
+  <li>없음</li>
+</ul>
+
+</body>
+</html>

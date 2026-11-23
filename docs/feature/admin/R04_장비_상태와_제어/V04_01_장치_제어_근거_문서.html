@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>V04_01 장치 제어 근거 문서</title>
+<style>
+  body { font-family: "Malgun Gothic", sans-serif; max-width: 960px; margin: 32px auto; padding: 0 16px; color: #1f2933; line-height: 1.6; }
+  h1 { font-size: 22px; margin-bottom: 12px; }
+  h2 { font-size: 16px; margin-top: 32px; border-bottom: 1px solid #d9dee4; padding-bottom: 4px; }
+  table { border-collapse: collapse; width: 100%; font-size: 14px; }
+  th, td { border: 1px solid #d9dee4; padding: 6px 10px; text-align: left; vertical-align: top; }
+  th { background: #f3f5f7; white-space: nowrap; }
+  .pass { color: #0b7a3b; font-weight: 600; white-space: nowrap; }
+  .fail { color: #b42318; font-weight: 600; white-space: nowrap; }
+  .skip { color: #8a6100; font-weight: 600; white-space: nowrap; }
+  .summary { border: 1px solid #d9dee4; border-left: 6px solid #0b7a3b; background: #f7faf8; padding: 12px 16px; margin: 12px 0 20px; }
+  .summary.bad { border-left-color: #b42318; background: #fdf6f5; }
+  .summary.warn { border-left-color: #8a6100; background: #fdfaf2; }
+  .summary p { margin: 4px 0; }
+  .counts span { display: inline-block; margin-right: 16px; }
+  .meta { width: auto; font-size: 13px; color: #52606d; }
+  .meta th, .meta td { border: none; padding: 2px 12px 2px 0; background: none; }
+  details { border: 1px solid #d9dee4; border-radius: 4px; margin: 8px 0; padding: 0 12px; }
+  details[open] { padding-bottom: 8px; }
+  summary { cursor: pointer; padding: 8px 0; font-size: 14px; }
+  summary b { margin-right: 8px; }
+  details p, details li { font-size: 14px; }
+</style>
+</head>
+<body>
+
+<h1>V04_01 장치 제어 근거 문서</h1>
+
+<div class="summary">
+  <p><strong>근거 문서의 모든 확인 항목이 충족되었다.</strong></p>
+  <p class="counts"><span class="pass">통과 6</span><span class="fail">미달 0</span><span class="skip">미확인 0</span></p>
+  <p>정해야 할 것: 없음</p>
+</div>
+
+<table class="meta">
+  <tr><th>태스크</th><td>T04_01</td></tr>
+  <tr><th>확인한 날짜</th><td>2026-11-21</td></tr>
+  <tr><th>확인한 커밋</th><td>기준점 <code>00646f4</code> + 작업 트리(커밋 <code>001cee7</code>, #27)</td></tr>
+  <tr><th>차수</th><td>1</td></tr>
+  <tr><th>복구</th><td>옛 작업 기록 저장소 밖 작업 문서 <code>2026-11-21-device-control-ref.md</code>의 검증 절(T017 검증)</td></tr>
+</table>
+
+<h2>판정</h2>
+<table>
+  <tr><th>ID</th><th>기준</th><th>결과</th><th>근거</th></tr>
+  <tr><td>옛 C1</td><td>머리말과 이미지 배치</td><td class="pass">통과</td><td>이미지 4개 표, 도구·날짜, 배치 요약, 1절의 <code>_1</code>·<code>_2</code> 관계 있음.</td></tr>
+  <tr><td>옛 C2</td><td>오퍼레이션 표가 비교 값 전부</td><td class="pass">통과</td><td>디컴파일 로그와 대조(B540 8개+시작, M130-W 6개+시작).</td></tr>
+  <tr><td>옛 C3</td><td>오브젝트·리소스 표</td><td class="pass">통과</td><td>오브젝트 3·4·5·99·100과 처리 리소스 전부.</td></tr>
+  <tr><td>옛 C4~C7·C11</td><td>응답·요약·모델 차이·미확인·기존 문서 차이 절</td><td class="pass">통과</td><td>각 절 있음.</td></tr>
+  <tr><td>옛 C8·C10</td><td>관련 문서·기준 spec 변경 범위</td><td class="pass">통과</td><td><code>git diff -U0 00646f4</code>로 허용한 줄뿐, 기준 spec은 이력 한 줄.</td></tr>
+  <tr><td>옛 C9</td><td>민감 정보 없음</td><td class="pass">통과</td><td>12자리 이상 16진수는 이미지 해시 칸·기존 해시뿐, 경로·서버 주소·키 검색 0건.</td></tr>
+</table>
+
+<h2>자세히</h2>
+<details>
+  <summary><b>옛 C1</b> 머리말과 이미지 배치</summary>
+  <p>이미지 4개 표, 도구·날짜, 배치 요약, 1절의 <code>_1</code>·<code>_2</code> 관계 있음.</p>
+</details>
+<details>
+  <summary><b>옛 C2</b> 오퍼레이션 표가 비교 값 전부</summary>
+  <p>디컴파일 로그와 대조(B540 8개+시작, M130-W 6개+시작).</p>
+</details>
+<details>
+  <summary><b>옛 C3</b> 오브젝트·리소스 표</summary>
+  <p>오브젝트 3·4·5·99·100과 처리 리소스 전부.</p>
+</details>
+<details>
+  <summary><b>옛 C4~C7·C11</b> 응답·요약·모델 차이·미확인·기존 문서 차이 절</summary>
+  <p>각 절 있음.</p>
+</details>
+<details>
+  <summary><b>옛 C8·C10</b> 관련 문서·기준 spec 변경 범위</summary>
+  <p><code>git diff -U0 00646f4</code>로 허용한 줄뿐, 기준 spec은 이력 한 줄.</p>
+</details>
+<details>
+  <summary><b>옛 C9</b> 민감 정보 없음</summary>
+  <p>12자리 이상 16진수는 이미지 해시 칸·기존 해시뿐, 경로·서버 주소·키 검색 0건.</p>
+</details>
+
+<h2>확인하지 못한 것</h2>
+<ul>
+  <li>값 JSON 키 조립은 미확인으로 표기</li>
+</ul>
+
+<h2>환경과 남긴 것</h2>
+<details>
+  <summary>확인한 환경, 끝난 뒤의 상태</summary>
+<ul>
+  <li>근거만 고친 작업이라 새 형식의 수용 기준이 없다. ID 칸은 옛 작업 스펙의 완료 조건이다.</li>
+</ul>
+</details>
+
+<h2>앞 차수</h2>
+<ul>
+  <li>없음</li>
+</ul>
+
+</body>
+</html>

@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>V04_02 장치 상태 대시보드와 제어 화면</title>
+<style>
+  body { font-family: "Malgun Gothic", sans-serif; max-width: 960px; margin: 32px auto; padding: 0 16px; color: #1f2933; line-height: 1.6; }
+  h1 { font-size: 22px; margin-bottom: 12px; }
+  h2 { font-size: 16px; margin-top: 32px; border-bottom: 1px solid #d9dee4; padding-bottom: 4px; }
+  table { border-collapse: collapse; width: 100%; font-size: 14px; }
+  th, td { border: 1px solid #d9dee4; padding: 6px 10px; text-align: left; vertical-align: top; }
+  th { background: #f3f5f7; white-space: nowrap; }
+  .pass { color: #0b7a3b; font-weight: 600; white-space: nowrap; }
+  .fail { color: #b42318; font-weight: 600; white-space: nowrap; }
+  .skip { color: #8a6100; font-weight: 600; white-space: nowrap; }
+  .summary { border: 1px solid #d9dee4; border-left: 6px solid #0b7a3b; background: #f7faf8; padding: 12px 16px; margin: 12px 0 20px; }
+  .summary.bad { border-left-color: #b42318; background: #fdf6f5; }
+  .summary.warn { border-left-color: #8a6100; background: #fdfaf2; }
+  .summary p { margin: 4px 0; }
+  .counts span { display: inline-block; margin-right: 16px; }
+  .meta { width: auto; font-size: 13px; color: #52606d; }
+  .meta th, .meta td { border: none; padding: 2px 12px 2px 0; background: none; }
+  details { border: 1px solid #d9dee4; border-radius: 4px; margin: 8px 0; padding: 0 12px; }
+  details[open] { padding-bottom: 8px; }
+  summary { cursor: pointer; padding: 8px 0; font-size: 14px; }
+  summary b { margin-right: 8px; }
+  details p, details li { font-size: 14px; }
+</style>
+</head>
+<body>
+
+<h1>V04_02 장치 상태 대시보드와 제어 화면</h1>
+
+<div class="summary">
+  <p><strong>모든 기준이 통과했고, 실장비 B540에서 예약 전원 재투입을 확인했다.</strong></p>
+  <p class="counts"><span class="pass">통과 9</span><span class="fail">미달 0</span><span class="skip">미확인 0</span></p>
+  <p>정해야 할 것: 없음</p>
+</div>
+
+<table class="meta">
+  <tr><th>태스크</th><td>T04_02</td></tr>
+  <tr><th>확인한 날짜</th><td>2026-11-22</td></tr>
+  <tr><th>확인한 커밋</th><td>기준점 <code>001cee7</code> + 작업 트리(커밋 <code>c5cad54</code>, #28)</td></tr>
+  <tr><th>차수</th><td>1</td></tr>
+  <tr><th>복구</th><td>옛 작업 기록 저장소 밖 작업 문서 <code>2026-11-22-device-control.md</code>의 검증 절</td></tr>
+</table>
+
+<h2>판정</h2>
+<table>
+  <tr><th>ID</th><th>기준</th><th>결과</th><th>근거</th></tr>
+  <tr><td>R04-A1~A4</td><td>상태 반영·온라인·토픽 기억·릴레이 읽기</td><td class="pass">통과</td><td><code>dotnet test --solution</code> 528건 중 527 통과·1 건너뜀의 <code>DeviceStateTests</code>.</td></tr>
+  <tr><td>R04-A5·A6·A15</td><td>상태 조회·스트림·장치 포트 404</td><td class="pass">통과</td><td><code>DeviceStatusApiTests</code> 통과.</td></tr>
+  <tr><td>R04-A7~A14</td><td>제어 API와 설정 조회</td><td class="pass">통과</td><td><code>DeviceControlApiTests</code> 통과(요일 글자는 일요일만·월요일만·일+월·모든 요일·화~토 경우).</td></tr>
+  <tr><td>device-server/R02-A15~A17</td><td>저장소 전달·접속 추적·명령 발행</td><td class="pass">통과</td><td>위 서버 테스트 통과.</td></tr>
+  <tr><td>R03-A1~A9</td><td>대시보드</td><td class="pass">통과</td><td><code>npm test</code> 통과(<code>DashboardPage.test.tsx</code>·<code>RelayControl.test.tsx</code>·<code>format.test.ts</code>·<code>App.test.tsx</code>). 배포본 390px에서 가로 스크롤 없음, 온라인 점이 <code>--success</code> 색.</td></tr>
+  <tr><td>R04-A16~A19</td><td>장비 제어 화면</td><td class="pass">통과</td><td><code>DeviceControlPage.test.tsx</code>·<code>validation.test.ts</code> 통과.</td></tr>
+  <tr><td>R04-A21</td><td>PC 배치 규격</td><td class="pass">통과</td><td>T040 뒤 <code>npm test</code> 157건 통과, 브라우저에서 묶음 좌표 확인.</td></tr>
+  <tr><td>R04-A13(실장비)</td><td>예약 전원 재투입</td><td class="pass">통과</td><td>B540 1.01.36 실장비에 그날 요일만 고른 예약 저장, 보낸 문자열 <code>1,U,T,0,0200000,16:42:00,F,10</code>. 사용자가 본체에서 "꺼졌다 켜짐"을 관찰했고 16:42:15 릴레이 켜짐 보고가 왔다. 예약 삭제 응답 true. 다시 켤 때까지의 10초는 재지 않았다.</td></tr>
+  <tr><td>R04-A26</td><td>자동 테스트 전체</td><td class="pass">통과</td><td>구현 후 검토 2회차 뒤 <code>npm test</code> 160건, build·lint 통과.</td></tr>
+</table>
+
+<h2>자세히</h2>
+<details>
+  <summary><b>R04-A1~A4</b> 상태 반영·온라인·토픽 기억·릴레이 읽기</summary>
+  <p><code>dotnet test --solution</code> 528건 중 527 통과·1 건너뜀의 <code>DeviceStateTests</code>.</p>
+</details>
+<details>
+  <summary><b>R04-A5·A6·A15</b> 상태 조회·스트림·장치 포트 404</summary>
+  <p><code>DeviceStatusApiTests</code> 통과.</p>
+</details>
+<details>
+  <summary><b>R04-A7~A14</b> 제어 API와 설정 조회</summary>
+  <p><code>DeviceControlApiTests</code> 통과(요일 글자는 일요일만·월요일만·일+월·모든 요일·화~토 경우).</p>
+</details>
+<details>
+  <summary><b>device-server/R02-A15~A17</b> 저장소 전달·접속 추적·명령 발행</summary>
+  <p>위 서버 테스트 통과.</p>
+</details>
+<details>
+  <summary><b>R03-A1~A9</b> 대시보드</summary>
+  <p><code>npm test</code> 통과(<code>DashboardPage.test.tsx</code>·<code>RelayControl.test.tsx</code>·<code>format.test.ts</code>·<code>App.test.tsx</code>). 배포본 390px에서 가로 스크롤 없음, 온라인 점이 <code>--success</code> 색.</p>
+</details>
+<details>
+  <summary><b>R04-A16~A19</b> 장비 제어 화면</summary>
+  <p><code>DeviceControlPage.test.tsx</code>·<code>validation.test.ts</code> 통과.</p>
+</details>
+<details>
+  <summary><b>R04-A21</b> PC 배치 규격</summary>
+  <p>T040 뒤 <code>npm test</code> 157건 통과, 브라우저에서 묶음 좌표 확인.</p>
+</details>
+<details>
+  <summary><b>R04-A13(실장비)</b> 예약 전원 재투입</summary>
+  <p>B540 1.01.36 실장비에 그날 요일만 고른 예약 저장, 보낸 문자열 <code>1,U,T,0,0200000,16:42:00,F,10</code>. 사용자가 본체에서 "꺼졌다 켜짐"을 관찰했고 16:42:15 릴레이 켜짐 보고가 왔다. 예약 삭제 응답 true. 다시 켤 때까지의 10초는 재지 않았다.</p>
+</details>
+<details>
+  <summary><b>R04-A26</b> 자동 테스트 전체</summary>
+  <p>구현 후 검토 2회차 뒤 <code>npm test</code> 160건, build·lint 통과.</p>
+</details>
+
+<h2>확인하지 못한 것</h2>
+<ul>
+  <li>그때는 장비명·단위 표기·로딩 개선이 없었다(<code>T04_03</code>)</li>
+</ul>
+
+<h2>환경과 남긴 것</h2>
+<details>
+  <summary>확인한 환경, 끝난 뒤의 상태</summary>
+<ul>
+  <li>서버 테스트 재실행 중 <code>KestrelTlsTests</code> 간헐 실패가 있었다(이 변경과 무관)</li>
+  <li>근거 문서에 대기전력 차단 관찰 반영</li>
+</ul>
+</details>
+
+<h2>앞 차수</h2>
+<ul>
+  <li>없음</li>
+</ul>
+
+</body>
+</html>

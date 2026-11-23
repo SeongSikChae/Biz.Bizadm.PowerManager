@@ -84,7 +84,7 @@ public sealed class DeviceStateTests
         Assert.AreEqual(0.0, second.GetProperty("power").GetDouble());
         Assert.IsTrue(second.GetProperty("lastReportAt").GetDateTimeOffset() > firstReportAt);
 
-        // 기존 수신 로그(mqtt-broker R5)는 그대로 남는다.
+        // 기존 수신 로그(device-server/R02-R5)는 그대로 남는다.
         await TestMqtt.WaitUntilAsync(() => TestMqtt.ReadLogs(LogDirectory).Contains($"Device message \"{operation}\"", StringComparison.Ordinal),
             "상태 보고 로그가 없다.");
         await app.StopAsync();

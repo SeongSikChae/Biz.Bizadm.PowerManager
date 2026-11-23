@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>V02_01 장비 목록 화면</title>
+<style>
+  body { font-family: "Malgun Gothic", sans-serif; max-width: 960px; margin: 32px auto; padding: 0 16px; color: #1f2933; line-height: 1.6; }
+  h1 { font-size: 22px; margin-bottom: 12px; }
+  h2 { font-size: 16px; margin-top: 32px; border-bottom: 1px solid #d9dee4; padding-bottom: 4px; }
+  table { border-collapse: collapse; width: 100%; font-size: 14px; }
+  th, td { border: 1px solid #d9dee4; padding: 6px 10px; text-align: left; vertical-align: top; }
+  th { background: #f3f5f7; white-space: nowrap; }
+  .pass { color: #0b7a3b; font-weight: 600; white-space: nowrap; }
+  .fail { color: #b42318; font-weight: 600; white-space: nowrap; }
+  .skip { color: #8a6100; font-weight: 600; white-space: nowrap; }
+  .summary { border: 1px solid #d9dee4; border-left: 6px solid #0b7a3b; background: #f7faf8; padding: 12px 16px; margin: 12px 0 20px; }
+  .summary.bad { border-left-color: #b42318; background: #fdf6f5; }
+  .summary.warn { border-left-color: #8a6100; background: #fdfaf2; }
+  .summary p { margin: 4px 0; }
+  .counts span { display: inline-block; margin-right: 16px; }
+  .meta { width: auto; font-size: 13px; color: #52606d; }
+  .meta th, .meta td { border: none; padding: 2px 12px 2px 0; background: none; }
+  details { border: 1px solid #d9dee4; border-radius: 4px; margin: 8px 0; padding: 0 12px; }
+  details[open] { padding-bottom: 8px; }
+  summary { cursor: pointer; padding: 8px 0; font-size: 14px; }
+  summary b { margin-right: 8px; }
+  details p, details li { font-size: 14px; }
+</style>
+</head>
+<body>
+
+<h1>V02_01 장비 목록 화면</h1>
+
+<div class="summary">
+  <p><strong>모든 기준이 통과했다. 그때는 장비명 열과 대시보드 경로가 없었다.</strong></p>
+  <p class="counts"><span class="pass">통과 16</span><span class="fail">미달 0</span><span class="skip">미확인 0</span></p>
+  <p>정해야 할 것: 없음</p>
+</div>
+
+<table class="meta">
+  <tr><th>태스크</th><td>T02_01</td></tr>
+  <tr><th>확인한 날짜</th><td>2026-11-19</td></tr>
+  <tr><th>확인한 커밋</th><td>기준점 <code>d351344</code> + 작업 트리(커밋 <code>e946c55</code>, #17)</td></tr>
+  <tr><th>차수</th><td>1</td></tr>
+  <tr><th>복구</th><td>옛 작업 기록 저장소 밖 작업 문서 <code>2026-11-19-device-list-ui.md</code>의 검증 절</td></tr>
+</table>
+
+<h2>판정</h2>
+<table>
+  <tr><th>ID</th><th>기준</th><th>결과</th><th>근거</th></tr>
+  <tr><td>R02-A1</td><td>목록 API 필드</td><td class="pass">통과</td><td>Server.Spa.Tests 57/57 통과(<code>AdminDeviceEndpointTests</code> 9건). 실제 Kestrel 실행에서 관리 포트 200·필드 여섯 개(그때).</td></tr>
+  <tr><td>R02-A2</td><td>정렬</td><td class="pass">통과</td><td>위 테스트 통과.</td></tr>
+  <tr><td>R02-A3</td><td>장치 포트 404</td><td class="pass">통과</td><td>위 테스트와 실제 Kestrel 실행에서 장치 포트 404.</td></tr>
+  <tr><td>R01-A6</td><td>관리 포트 제한</td><td class="pass">통과</td><td>위와 같음.</td></tr>
+  <tr><td>R02-A4</td><td>머리와 대수</td><td class="pass">통과</td><td><code>npm test</code> 37/37 통과. 브라우저 1440px에서 "서버에 등록된 장비 60대".</td></tr>
+  <tr><td>R02-A5</td><td>열과 빈 값</td><td class="pass">통과</td><td><code>deviceList.test.ts</code> 통과.</td></tr>
+  <tr><td>R02-A6</td><td>시각과 상대 시간</td><td class="pass">통과</td><td>위와 같음.</td></tr>
+  <tr><td>R02-A7</td><td>정렬 조작</td><td class="pass">통과</td><td>위와 같음. 브라우저에서 Enter로 등록 내림차순 정렬.</td></tr>
+  <tr><td>R02-A8</td><td>검색</td><td class="pass">통과</td><td>위와 같음.</td></tr>
+  <tr><td>R02-A9</td><td>페이지</td><td class="pass">통과</td><td>위와 같음.</td></tr>
+  <tr><td>R02-A10</td><td>불러오기·실패·다시 불러오기</td><td class="pass">통과</td><td><code>DevicesPage.test.tsx</code> 통과. 서버를 끄고 새로 고치면 표가 남은 채 오류 안내.</td></tr>
+  <tr><td>R02-A11</td><td>390px 가로 스크롤</td><td class="pass">통과</td><td>390px에서 문서 폭 390, 표 상자 scrollWidth 720·overflow-x auto.</td></tr>
+  <tr><td>R02-A12</td><td>레이블·키보드</td><td class="pass">통과</td><td>Tab 순서와 포커스 링 확인.</td></tr>
+  <tr><td>R02-A13</td><td>자동 테스트 전체</td><td class="pass">통과</td><td>Server.Spa.Tests 57/57, <code>npm test</code> 37/37, <code>npm run build</code>·<code>npm run lint</code> 통과.</td></tr>
+  <tr><td>R01-A2</td><td>웹 글꼴과 고정폭</td><td class="pass">통과</td><td><code>document.fonts.check(... "Noto Sans KR Variable")</code> = true, body 글꼴 확인.</td></tr>
+  <tr><td>R01-A3</td><td>앱 틀 배치</td><td class="pass">통과</td><td>1440px 나란히(사이드바 225px), 390px 위로 쌓임(그때 메뉴는 "장비" 하나).</td></tr>
+</table>
+
+<h2>자세히</h2>
+<details>
+  <summary><b>R02-A1</b> 목록 API 필드</summary>
+  <p>Server.Spa.Tests 57/57 통과(<code>AdminDeviceEndpointTests</code> 9건). 실제 Kestrel 실행에서 관리 포트 200·필드 여섯 개(그때).</p>
+</details>
+<details>
+  <summary><b>R02-A2</b> 정렬</summary>
+  <p>위 테스트 통과.</p>
+</details>
+<details>
+  <summary><b>R02-A3</b> 장치 포트 404</summary>
+  <p>위 테스트와 실제 Kestrel 실행에서 장치 포트 404.</p>
+</details>
+<details>
+  <summary><b>R01-A6</b> 관리 포트 제한</summary>
+  <p>위와 같음.</p>
+</details>
+<details>
+  <summary><b>R02-A4</b> 머리와 대수</summary>
+  <p><code>npm test</code> 37/37 통과. 브라우저 1440px에서 "서버에 등록된 장비 60대".</p>
+</details>
+<details>
+  <summary><b>R02-A5</b> 열과 빈 값</summary>
+  <p><code>deviceList.test.ts</code> 통과.</p>
+</details>
+<details>
+  <summary><b>R02-A6</b> 시각과 상대 시간</summary>
+  <p>위와 같음.</p>
+</details>
+<details>
+  <summary><b>R02-A7</b> 정렬 조작</summary>
+  <p>위와 같음. 브라우저에서 Enter로 등록 내림차순 정렬.</p>
+</details>
+<details>
+  <summary><b>R02-A8</b> 검색</summary>
+  <p>위와 같음.</p>
+</details>
+<details>
+  <summary><b>R02-A9</b> 페이지</summary>
+  <p>위와 같음.</p>
+</details>
+<details>
+  <summary><b>R02-A10</b> 불러오기·실패·다시 불러오기</summary>
+  <p><code>DevicesPage.test.tsx</code> 통과. 서버를 끄고 새로 고치면 표가 남은 채 오류 안내.</p>
+</details>
+<details>
+  <summary><b>R02-A11</b> 390px 가로 스크롤</summary>
+  <p>390px에서 문서 폭 390, 표 상자 scrollWidth 720·overflow-x auto.</p>
+</details>
+<details>
+  <summary><b>R02-A12</b> 레이블·키보드</summary>
+  <p>Tab 순서와 포커스 링 확인.</p>
+</details>
+<details>
+  <summary><b>R02-A13</b> 자동 테스트 전체</summary>
+  <p>Server.Spa.Tests 57/57, <code>npm test</code> 37/37, <code>npm run build</code>·<code>npm run lint</code> 통과.</p>
+</details>
+<details>
+  <summary><b>R01-A2</b> 웹 글꼴과 고정폭</summary>
+  <p><code>document.fonts.check(... "Noto Sans KR Variable")</code> = true, body 글꼴 확인.</p>
+</details>
+<details>
+  <summary><b>R01-A3</b> 앱 틀 배치</summary>
+  <p>1440px 나란히(사이드바 225px), 390px 위로 쌓임(그때 메뉴는 "장비" 하나).</p>
+</details>
+
+<h2>확인하지 못한 것</h2>
+<ul>
+  <li>다른 테스트 프로젝트(바뀐 파일 없음)는 실행하지 않음</li>
+  <li>TLS를 켠 실제 HTTPS 포트 실행</li>
+</ul>
+
+<h2>환경과 남긴 것</h2>
+<details>
+  <summary>확인한 환경, 끝난 뒤의 상태</summary>
+<ul>
+  <li>스크래치 임시 설정(관리 5080, 장치 18546), 장비 60대 등록, Vite 개발 서버</li>
+  <li>끝난 뒤 서버·Vite 종료, 시험용 Windows 자격 증명 삭제</li>
+</ul>
+</details>
+
+<h2>앞 차수</h2>
+<ul>
+  <li>없음</li>
+</ul>
+
+</body>
+</html>

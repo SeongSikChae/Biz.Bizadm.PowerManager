@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>V01_02 B540 FOTA 요청 경로 분석</title>
+<style>
+  body { font-family: "Malgun Gothic", sans-serif; max-width: 960px; margin: 32px auto; padding: 0 16px; color: #1f2933; line-height: 1.6; }
+  h1 { font-size: 22px; margin-bottom: 12px; }
+  h2 { font-size: 16px; margin-top: 32px; border-bottom: 1px solid #d9dee4; padding-bottom: 4px; }
+  table { border-collapse: collapse; width: 100%; font-size: 14px; }
+  th, td { border: 1px solid #d9dee4; padding: 6px 10px; text-align: left; vertical-align: top; }
+  th { background: #f3f5f7; white-space: nowrap; }
+  .pass { color: #0b7a3b; font-weight: 600; white-space: nowrap; }
+  .fail { color: #b42318; font-weight: 600; white-space: nowrap; }
+  .skip { color: #8a6100; font-weight: 600; white-space: nowrap; }
+  .summary { border: 1px solid #d9dee4; border-left: 6px solid #0b7a3b; background: #f7faf8; padding: 12px 16px; margin: 12px 0 20px; }
+  .summary.bad { border-left-color: #b42318; background: #fdf6f5; }
+  .summary.warn { border-left-color: #8a6100; background: #fdfaf2; }
+  .summary p { margin: 4px 0; }
+  .counts span { display: inline-block; margin-right: 16px; }
+  .meta { width: auto; font-size: 13px; color: #52606d; }
+  .meta th, .meta td { border: none; padding: 2px 12px 2px 0; background: none; }
+  details { border: 1px solid #d9dee4; border-radius: 4px; margin: 8px 0; padding: 0 12px; }
+  details[open] { padding-bottom: 8px; }
+  summary { cursor: pointer; padding: 8px 0; font-size: 14px; }
+  summary b { margin-right: 8px; }
+  details p, details li { font-size: 14px; }
+</style>
+</head>
+<body>
+
+<h1>V01_02 B540 FOTA 요청 경로 분석</h1>
+
+<div class="summary warn">
+  <p><strong>분석 항목이 모두 근거 주소와 함께 정리되었다. 일부 의미는 추정으로 표기했다.</strong></p>
+  <p class="counts"><span class="pass">통과 4</span><span class="fail">미달 0</span><span class="skip">미확인 1</span></p>
+  <p>정해야 할 것: 없음</p>
+</div>
+
+<table class="meta">
+  <tr><th>태스크</th><td>T01_02</td></tr>
+  <tr><th>확인한 날짜</th><td>2026-11-20</td></tr>
+  <tr><th>확인한 커밋</th><td>기준점 <code>074f02f</code> + 작업 트리(커밋 <code>34dd1de</code>, #24)</td></tr>
+  <tr><th>차수</th><td>1</td></tr>
+  <tr><th>복구</th><td>옛 작업 기록 저장소 밖 작업 문서 <code>2026-11-20-b540-fota-path.md</code>의 검증 절(구현 결과)</td></tr>
+</table>
+
+<h2>판정</h2>
+<table>
+  <tr><th>ID</th><th>기준</th><th>결과</th><th>근거</th></tr>
+  <tr><td>옛 C5</td><td>리소스 번호</td><td class="skip">미확인</td><td><code>/5/0/N</code>의 N과 내부 필드 매핑은 미확인, <code>/5/0/1</code>=URL은 추정.</td></tr>
+  <tr><td>옛 C1</td><td>URL 분해</td><td class="pass">통과</td><td><code>UpdateUrlParser</code> <code>0x402c8f80</code>이 스킴·호스트·포트·경로로 나눠 저장함을 확인.</td></tr>
+  <tr><td>옛 C2</td><td>요청 줄</td><td class="pass">통과</td><td>빌더 <code>0x4029e154</code>가 <code>GET %s%s</code>만 쓰고 <code>/version</code> 형식은 슬롯 B에서 참조되지 않음.</td></tr>
+  <tr><td>옛 C3</td><td><code>%s</code> 인자</td><td class="pass">통과</td><td>경로 / 슬롯 접미사 / 호스트 / 고정 헤더. 슬롯 A <code>_1</code>, 슬롯 B <code>_2</code>(od로 확인).</td></tr>
+  <tr><td>옛 C4</td><td>버전 비교</td><td class="pass">통과</td><td><code>checkVersionChar</code> <code>0x402c8c70</code>이 URL 안 버전을 자기 버전과 비교.</td></tr>
+</table>
+
+<h2>자세히</h2>
+<details>
+  <summary><b>옛 C5</b> 리소스 번호</summary>
+  <p><code>/5/0/N</code>의 N과 내부 필드 매핑은 미확인, <code>/5/0/1</code>=URL은 추정.</p>
+</details>
+<details>
+  <summary><b>옛 C1</b> URL 분해</summary>
+  <p><code>UpdateUrlParser</code> <code>0x402c8f80</code>이 스킴·호스트·포트·경로로 나눠 저장함을 확인.</p>
+</details>
+<details>
+  <summary><b>옛 C2</b> 요청 줄</summary>
+  <p>빌더 <code>0x4029e154</code>가 <code>GET %s%s</code>만 쓰고 <code>/version</code> 형식은 슬롯 B에서 참조되지 않음.</p>
+</details>
+<details>
+  <summary><b>옛 C3</b> <code>%s</code> 인자</summary>
+  <p>경로 / 슬롯 접미사 / 호스트 / 고정 헤더. 슬롯 A <code>_1</code>, 슬롯 B <code>_2</code>(od로 확인).</p>
+</details>
+<details>
+  <summary><b>옛 C4</b> 버전 비교</summary>
+  <p><code>checkVersionChar</code> <code>0x402c8c70</code>이 URL 안 버전을 자기 버전과 비교.</p>
+</details>
+
+<h2>확인하지 못한 것</h2>
+<ul>
+  <li><code>/5/0/N</code> 매핑</li>
+  <li>슬롯 판정 함수의 의미(SDK 형태 추정)</li>
+</ul>
+
+<h2>환경과 남긴 것</h2>
+<details>
+  <summary>확인한 환경, 끝난 뒤의 상태</summary>
+<ul>
+  <li>근거만 고친 작업이라 새 형식의 수용 기준이 없다. ID 칸은 옛 작업 스펙의 완료 조건이다.</li>
+  <li>산출물과 덤프는 원격에만 두고 저장소에는 결론과 근거 주소만</li>
+</ul>
+</details>
+
+<h2>앞 차수</h2>
+<ul>
+  <li>없음</li>
+</ul>
+
+</body>
+</html>

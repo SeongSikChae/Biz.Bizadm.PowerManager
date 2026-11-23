@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>V03_03 settings 인자로 설정 덮어쓰기</title>
+<style>
+  body { font-family: "Malgun Gothic", sans-serif; max-width: 960px; margin: 32px auto; padding: 0 16px; color: #1f2933; line-height: 1.6; }
+  h1 { font-size: 22px; margin-bottom: 12px; }
+  h2 { font-size: 16px; margin-top: 32px; border-bottom: 1px solid #d9dee4; padding-bottom: 4px; }
+  table { border-collapse: collapse; width: 100%; font-size: 14px; }
+  th, td { border: 1px solid #d9dee4; padding: 6px 10px; text-align: left; vertical-align: top; }
+  th { background: #f3f5f7; white-space: nowrap; }
+  .pass { color: #0b7a3b; font-weight: 600; white-space: nowrap; }
+  .fail { color: #b42318; font-weight: 600; white-space: nowrap; }
+  .skip { color: #8a6100; font-weight: 600; white-space: nowrap; }
+  .summary { border: 1px solid #d9dee4; border-left: 6px solid #0b7a3b; background: #f7faf8; padding: 12px 16px; margin: 12px 0 20px; }
+  .summary.bad { border-left-color: #b42318; background: #fdf6f5; }
+  .summary.warn { border-left-color: #8a6100; background: #fdfaf2; }
+  .summary p { margin: 4px 0; }
+  .counts span { display: inline-block; margin-right: 16px; }
+  .meta { width: auto; font-size: 13px; color: #52606d; }
+  .meta th, .meta td { border: none; padding: 2px 12px 2px 0; background: none; }
+  details { border: 1px solid #d9dee4; border-radius: 4px; margin: 8px 0; padding: 0 12px; }
+  details[open] { padding-bottom: 8px; }
+  summary { cursor: pointer; padding: 8px 0; font-size: 14px; }
+  summary b { margin-right: 8px; }
+  details p, details li { font-size: 14px; }
+</style>
+</head>
+<body>
+
+<h1>V03_03 settings 인자로 설정 덮어쓰기</h1>
+
+<div class="summary warn">
+  <p><strong>검증 결과 기록이 없어 미확인이다. 개발 문서에는 stdio 실측으로 처리 방식을 바꾼 경위만 있다.</strong></p>
+  <p class="counts"><span class="pass">통과 0</span><span class="fail">미달 0</span><span class="skip">미확인 1</span></p>
+  <p>정해야 할 것: 아래 "정해야 할 것" 1건</p>
+</div>
+
+<table class="meta">
+  <tr><th>태스크</th><td>T03_03</td></tr>
+  <tr><th>확인한 날짜</th><td>2026-11-11</td></tr>
+  <tr><th>확인한 커밋</th><td><code>2914f35</code>(#9)</td></tr>
+  <tr><th>차수</th><td>1</td></tr>
+  <tr><th>복구</th><td><code>docs/mcp/0005-device-config-mcp-settings-override-개발.md</code>(지움. <code>15dc357</code>에 있음)</td></tr>
+</table>
+
+<h2>판정</h2>
+<table>
+  <tr><th>ID</th><th>기준</th><th>결과</th><th>근거</th></tr>
+  <tr><td>R03-A9</td><td>필드 단위 덮어쓰기, 누락·범위·모르는 키 거부</td><td class="skip">미확인</td><td>검증 명령과 기대만 적혀 있다. <code>[JsonUnmappedMemberHandling(Disallow)]</code>가 SDK에서 원인을 가린다는 stdio 실측으로 <code>[JsonExtensionData]</code> 방식으로 바꿨다는 기록만 있다.</td></tr>
+</table>
+
+<h2>정해야 할 것</h2>
+<ul>
+  <li>지금 코드로 <code>dotnet test</code>를 돌려 이 기준을 다시 확인할지</li>
+</ul>
+
+<h2>자세히</h2>
+<details>
+  <summary><b>R03-A9</b> 필드 단위 덮어쓰기, 누락·범위·모르는 키 거부</summary>
+  <p>검증 명령과 기대만 적혀 있다. <code>[JsonUnmappedMemberHandling(Disallow)]</code>가 SDK에서 원인을 가린다는 stdio 실측으로 <code>[JsonExtensionData]</code> 방식으로 바꿨다는 기록만 있다.</p>
+</details>
+
+<h2>확인하지 못한 것</h2>
+<ul>
+  <li>테스트 실행 결과</li>
+  <li>실제 장치 <code>ConnectAp</code>(상태 변경 명령이라 하지 않음)</li>
+</ul>
+
+<h2>환경과 남긴 것</h2>
+<details>
+  <summary>확인한 환경, 끝난 뒤의 상태</summary>
+<ul>
+  <li>2026-11-23 옛 작업 기록에서 복구했다. 지금 코드로 다시 실행한 것이 아니다.</li>
+</ul>
+</details>
+
+<h2>앞 차수</h2>
+<ul>
+  <li>없음</li>
+</ul>
+
+</body>
+</html>

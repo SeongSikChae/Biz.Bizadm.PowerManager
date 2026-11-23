@@ -4,7 +4,7 @@
     <OutputType>Exe</OutputType>
     <EnableMSTestRunner>true</EnableMSTestRunner>
     <IsPackable>false</IsPackable>
-    <!-- Device(실장비) 테스트는 기본 dotnet test에서 제외한다. 실행 방법은 docs/cli/0003-device-config-개발.md U1 참고 -->
+    <!-- Device(실장비) 테스트는 기본 dotnet test에서 제외한다. 실행 방법은 docs/feature/device-setup/R01_장치_설정_라이브러리 스펙의 「지금 동작」 참고 -->
     <TestingPlatformCommandLineArguments>--filter "TestCategory!=Device"</TestingPlatformCommandLineArguments>
   </PropertyGroup>
 

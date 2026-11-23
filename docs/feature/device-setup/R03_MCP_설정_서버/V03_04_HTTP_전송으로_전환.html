@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>V03_04 HTTP 전송으로 전환</title>
+<style>
+  body { font-family: "Malgun Gothic", sans-serif; max-width: 960px; margin: 32px auto; padding: 0 16px; color: #1f2933; line-height: 1.6; }
+  h1 { font-size: 22px; margin-bottom: 12px; }
+  h2 { font-size: 16px; margin-top: 32px; border-bottom: 1px solid #d9dee4; padding-bottom: 4px; }
+  table { border-collapse: collapse; width: 100%; font-size: 14px; }
+  th, td { border: 1px solid #d9dee4; padding: 6px 10px; text-align: left; vertical-align: top; }
+  th { background: #f3f5f7; white-space: nowrap; }
+  .pass { color: #0b7a3b; font-weight: 600; white-space: nowrap; }
+  .fail { color: #b42318; font-weight: 600; white-space: nowrap; }
+  .skip { color: #8a6100; font-weight: 600; white-space: nowrap; }
+  .summary { border: 1px solid #d9dee4; border-left: 6px solid #0b7a3b; background: #f7faf8; padding: 12px 16px; margin: 12px 0 20px; }
+  .summary.bad { border-left-color: #b42318; background: #fdf6f5; }
+  .summary.warn { border-left-color: #8a6100; background: #fdfaf2; }
+  .summary p { margin: 4px 0; }
+  .counts span { display: inline-block; margin-right: 16px; }
+  .meta { width: auto; font-size: 13px; color: #52606d; }
+  .meta th, .meta td { border: none; padding: 2px 12px 2px 0; background: none; }
+  details { border: 1px solid #d9dee4; border-radius: 4px; margin: 8px 0; padding: 0 12px; }
+  details[open] { padding-bottom: 8px; }
+  summary { cursor: pointer; padding: 8px 0; font-size: 14px; }
+  summary b { margin-right: 8px; }
+  details p, details li { font-size: 14px; }
+</style>
+</head>
+<body>
+
+<h1>V03_04 HTTP 전송으로 전환</h1>
+
+<div class="summary warn">
+  <p><strong>서비스 실행을 빼고 모두 확인했다. 서비스 등록·시작·중지는 미확인인 채 사용자 확인으로 #10을 종결했다.</strong></p>
+  <p class="counts"><span class="pass">통과 5</span><span class="fail">미달 0</span><span class="skip">미확인 1</span></p>
+  <p>정해야 할 것: 없음</p>
+</div>
+
+<table class="meta">
+  <tr><th>태스크</th><td>T03_04</td></tr>
+  <tr><th>확인한 날짜</th><td>2026-11-18</td></tr>
+  <tr><th>확인한 커밋</th><td>기준점 <code>dd98be7</code> + 작업 트리(커밋 <code>1517b24</code>, #10)</td></tr>
+  <tr><th>차수</th><td>1</td></tr>
+  <tr><th>복구</th><td>옛 작업 기록 저장소 밖 작업 문서 <code>2026-11-18-mcp-http-transport.md</code>의 검증 절(마무리)</td></tr>
+</table>
+
+<h2>판정</h2>
+<table>
+  <tr><th>ID</th><th>기준</th><th>결과</th><th>근거</th></tr>
+  <tr><td>R03-A4</td><td>콘솔 Ctrl+C 종료와 서비스 시작·중지</td><td class="skip">미확인</td><td>콘솔 Ctrl+C 정상 종료는 확인. 서비스 등록·시작·중지는 미확인(사용자가 배포 뒤 직접 확인하기로 함).</td></tr>
+  <tr><td>R03-A1</td><td>HTTP <code>/mcp</code>로 tool 호출, stdio 없음</td><td class="pass">통과</td><td>작업 기록: 옛 C1 확인.</td></tr>
+  <tr><td>R03-A2</td><td><code>Http.Port</code> 필수·범위</td><td class="pass">통과</td><td>작업 기록: 옛 C2 확인.</td></tr>
+  <tr><td>R03-A3</td><td>루프백 바인딩</td><td class="pass">통과</td><td>작업 기록: 옛 C3 확인.</td></tr>
+  <tr><td>R03-A7</td><td>기존 schema·annotation·오류 단언 유지</td><td class="pass">통과</td><td>작업 기록: 옛 C5 확인.</td></tr>
+  <tr><td>R03-A11</td><td>사용 문서의 세 방법</td><td class="pass">통과</td><td>작업 기록: 옛 C6 확인.</td></tr>
+</table>
+
+<h2>자세히</h2>
+<details>
+  <summary><b>R03-A4</b> 콘솔 Ctrl+C 종료와 서비스 시작·중지</summary>
+  <p>콘솔 Ctrl+C 정상 종료는 확인. 서비스 등록·시작·중지는 미확인(사용자가 배포 뒤 직접 확인하기로 함).</p>
+</details>
+<details>
+  <summary><b>R03-A1</b> HTTP <code>/mcp</code>로 tool 호출, stdio 없음</summary>
+  <p>작업 기록: 옛 C1 확인.</p>
+</details>
+<details>
+  <summary><b>R03-A2</b> <code>Http.Port</code> 필수·범위</summary>
+  <p>작업 기록: 옛 C2 확인.</p>
+</details>
+<details>
+  <summary><b>R03-A3</b> 루프백 바인딩</summary>
+  <p>작업 기록: 옛 C3 확인.</p>
+</details>
+<details>
+  <summary><b>R03-A7</b> 기존 schema·annotation·오류 단언 유지</summary>
+  <p>작업 기록: 옛 C5 확인.</p>
+</details>
+<details>
+  <summary><b>R03-A11</b> 사용 문서의 세 방법</summary>
+  <p>작업 기록: 옛 C6 확인.</p>
+</details>
+
+<h2>확인하지 못한 것</h2>
+<ul>
+  <li>Windows 서비스로 등록·시작·중지(이슈 #10 댓글에 미확인 기록)</li>
+</ul>
+
+<h2>환경과 남긴 것</h2>
+<details>
+  <summary>확인한 환경, 끝난 뒤의 상태</summary>
+<ul>
+  <li>작업 기록에 판정만 있고 테스트 건수는 적혀 있지 않다</li>
+</ul>
+</details>
+
+<h2>앞 차수</h2>
+<ul>
+  <li>없음</li>
+</ul>
+
+</body>
+</html>

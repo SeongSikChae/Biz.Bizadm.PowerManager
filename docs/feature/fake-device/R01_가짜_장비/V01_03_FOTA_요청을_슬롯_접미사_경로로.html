@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>V01_03 FOTA 요청을 슬롯 접미사 경로로</title>
+<style>
+  body { font-family: "Malgun Gothic", sans-serif; max-width: 960px; margin: 32px auto; padding: 0 16px; color: #1f2933; line-height: 1.6; }
+  h1 { font-size: 22px; margin-bottom: 12px; }
+  h2 { font-size: 16px; margin-top: 32px; border-bottom: 1px solid #d9dee4; padding-bottom: 4px; }
+  table { border-collapse: collapse; width: 100%; font-size: 14px; }
+  th, td { border: 1px solid #d9dee4; padding: 6px 10px; text-align: left; vertical-align: top; }
+  th { background: #f3f5f7; white-space: nowrap; }
+  .pass { color: #0b7a3b; font-weight: 600; white-space: nowrap; }
+  .fail { color: #b42318; font-weight: 600; white-space: nowrap; }
+  .skip { color: #8a6100; font-weight: 600; white-space: nowrap; }
+  .summary { border: 1px solid #d9dee4; border-left: 6px solid #0b7a3b; background: #f7faf8; padding: 12px 16px; margin: 12px 0 20px; }
+  .summary.bad { border-left-color: #b42318; background: #fdf6f5; }
+  .summary.warn { border-left-color: #8a6100; background: #fdfaf2; }
+  .summary p { margin: 4px 0; }
+  .counts span { display: inline-block; margin-right: 16px; }
+  .meta { width: auto; font-size: 13px; color: #52606d; }
+  .meta th, .meta td { border: none; padding: 2px 12px 2px 0; background: none; }
+  details { border: 1px solid #d9dee4; border-radius: 4px; margin: 8px 0; padding: 0 12px; }
+  details[open] { padding-bottom: 8px; }
+  summary { cursor: pointer; padding: 8px 0; font-size: 14px; }
+  summary b { margin-right: 8px; }
+  details p, details li { font-size: 14px; }
+</style>
+</head>
+<body>
+
+<h1>V01_03 FOTA 요청을 슬롯 접미사 경로로</h1>
+
+<div class="summary">
+  <p><strong>모든 기준이 통과했고, 실제 다원에서 이미지를 200으로 받아 기준 해시와 맞았다.</strong></p>
+  <p class="counts"><span class="pass">통과 6</span><span class="fail">미달 0</span><span class="skip">미확인 0</span></p>
+  <p>정해야 할 것: 없음</p>
+</div>
+
+<table class="meta">
+  <tr><th>태스크</th><td>T01_03</td></tr>
+  <tr><th>확인한 날짜</th><td>2026-11-20</td></tr>
+  <tr><th>확인한 커밋</th><td>기준점 <code>34dd1de</code> + 작업 트리(커밋 <code>53a34ad</code>, #24)</td></tr>
+  <tr><th>차수</th><td>1</td></tr>
+  <tr><th>복구</th><td>옛 작업 기록 저장소 밖 작업 문서 <code>2026-11-20-dawon-fake-device-fota-path.md</code>의 검증 절(T015 실제 다원 실행, 구현 후 검토)</td></tr>
+</table>
+
+<h2>판정</h2>
+<table>
+  <tr><th>ID</th><th>기준</th><th>결과</th><th>근거</th></tr>
+  <tr><td>R01-A1</td><td>실행 슬롯 설정</td><td class="pass">통과</td><td>가짜 장비 테스트 151개 통과(구현 후 검토자가 다시 확인).</td></tr>
+  <tr><td>R01-A9</td><td>FOTA 응답 항목, 본문 없음</td><td class="pass">통과</td><td>위와 같음.</td></tr>
+  <tr><td>R01-A14</td><td>이미지 요청 하나</td><td class="pass">통과</td><td>위 테스트 통과. 실제 다원(펌웨어 1.01.30, 슬롯 2) 자동 받기 <code>GET …/1.01.34_1</code> → 200, 392340바이트, SHA-256이 사전 확인한 기준값과 같음, <code>/version</code> 요청 없음.</td></tr>
+  <tr><td>R01-A15</td><td><code>fota</code>·<code>get</code> 명령</td><td class="pass">통과</td><td>위 테스트 통과.</td></tr>
+  <tr><td>R01-A16</td><td>받기 규칙</td><td class="pass">통과</td><td>위 테스트 통과.</td></tr>
+  <tr><td>R01-A17</td><td>자동 테스트 전체</td><td class="pass">통과</td><td>151개 통과.</td></tr>
+</table>
+
+<h2>자세히</h2>
+<details>
+  <summary><b>R01-A1</b> 실행 슬롯 설정</summary>
+  <p>가짜 장비 테스트 151개 통과(구현 후 검토자가 다시 확인).</p>
+</details>
+<details>
+  <summary><b>R01-A9</b> FOTA 응답 항목, 본문 없음</summary>
+  <p>위와 같음.</p>
+</details>
+<details>
+  <summary><b>R01-A14</b> 이미지 요청 하나</summary>
+  <p>위 테스트 통과. 실제 다원(펌웨어 1.01.30, 슬롯 2) 자동 받기 <code>GET …/1.01.34_1</code> → 200, 392340바이트, SHA-256이 사전 확인한 기준값과 같음, <code>/version</code> 요청 없음.</p>
+</details>
+<details>
+  <summary><b>R01-A15</b> <code>fota</code>·<code>get</code> 명령</summary>
+  <p>위 테스트 통과.</p>
+</details>
+<details>
+  <summary><b>R01-A16</b> 받기 규칙</summary>
+  <p>위 테스트 통과.</p>
+</details>
+<details>
+  <summary><b>R01-A17</b> 자동 테스트 전체</summary>
+  <p>151개 통과.</p>
+</details>
+
+<h2>확인하지 못한 것</h2>
+<ul>
+  <li>실행 슬롯 반대편 규칙은 추정</li>
+</ul>
+
+<h2>환경과 남긴 것</h2>
+<details>
+  <summary>확인한 환경, 끝난 뒤의 상태</summary>
+<ul>
+  <li>설정·기록은 스크래치에만 두었고 받은 펌웨어는 저장소에 넣지 않음</li>
+  <li>quit으로 정상 종료(종료 코드 0)</li>
+</ul>
+</details>
+
+<h2>앞 차수</h2>
+<ul>
+  <li>없음</li>
+</ul>
+
+</body>
+</html>

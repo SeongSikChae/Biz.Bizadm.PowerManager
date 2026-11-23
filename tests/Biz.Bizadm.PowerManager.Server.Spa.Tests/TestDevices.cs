@@ -6,7 +6,7 @@ using MQTTnet;
 namespace Biz.Bizadm.PowerManager.Server.Spa.Tests;
 
 /// <summary>
-/// 등록한 시험 장치. 브로커는 등록 장치가 발급 키로 접속할 때만 받으므로(mqtt-broker R9) 테스트 클라이언트는 이 값으로 접속한다.
+/// 등록한 시험 장치. 브로커는 등록 장치가 발급 키로 접속할 때만 받으므로(device-server/R02-R9) 테스트 클라이언트는 이 값으로 접속한다.
 /// </summary>
 internal sealed record TestDevice(string Mac, string ClientId, string UserName, string Password);
 

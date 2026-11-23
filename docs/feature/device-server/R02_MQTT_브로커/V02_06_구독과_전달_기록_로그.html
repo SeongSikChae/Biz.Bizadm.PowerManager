@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>V02_06 구독과 전달 기록 로그</title>
+<style>
+  body { font-family: "Malgun Gothic", sans-serif; max-width: 960px; margin: 32px auto; padding: 0 16px; color: #1f2933; line-height: 1.6; }
+  h1 { font-size: 22px; margin-bottom: 12px; }
+  h2 { font-size: 16px; margin-top: 32px; border-bottom: 1px solid #d9dee4; padding-bottom: 4px; }
+  table { border-collapse: collapse; width: 100%; font-size: 14px; }
+  th, td { border: 1px solid #d9dee4; padding: 6px 10px; text-align: left; vertical-align: top; }
+  th { background: #f3f5f7; white-space: nowrap; }
+  .pass { color: #0b7a3b; font-weight: 600; white-space: nowrap; }
+  .fail { color: #b42318; font-weight: 600; white-space: nowrap; }
+  .skip { color: #8a6100; font-weight: 600; white-space: nowrap; }
+  .summary { border: 1px solid #d9dee4; border-left: 6px solid #0b7a3b; background: #f7faf8; padding: 12px 16px; margin: 12px 0 20px; }
+  .summary.bad { border-left-color: #b42318; background: #fdf6f5; }
+  .summary.warn { border-left-color: #8a6100; background: #fdfaf2; }
+  .summary p { margin: 4px 0; }
+  .counts span { display: inline-block; margin-right: 16px; }
+  .meta { width: auto; font-size: 13px; color: #52606d; }
+  .meta th, .meta td { border: none; padding: 2px 12px 2px 0; background: none; }
+  details { border: 1px solid #d9dee4; border-radius: 4px; margin: 8px 0; padding: 0 12px; }
+  details[open] { padding-bottom: 8px; }
+  summary { cursor: pointer; padding: 8px 0; font-size: 14px; }
+  summary b { margin-right: 8px; }
+  details p, details li { font-size: 14px; }
+</style>
+</head>
+<body>
+
+<h1>V02_06 구독과 전달 기록 로그</h1>
+
+<div class="summary">
+  <p><strong>네 기준 모두 통과했고, 실장비 네 대에서 구독과 큐 넣음이 정상임을 확인했다.</strong></p>
+  <p class="counts"><span class="pass">통과 4</span><span class="fail">미달 0</span><span class="skip">미확인 0</span></p>
+  <p>정해야 할 것: 없음</p>
+</div>
+
+<table class="meta">
+  <tr><th>태스크</th><td>T02_06</td></tr>
+  <tr><th>확인한 날짜</th><td>2026-11-21</td></tr>
+  <tr><th>확인한 커밋</th><td>기준점 <code>e79a4b8</code> + 작업 트리(커밋 <code>7cb6e7f</code>, #23)</td></tr>
+  <tr><th>차수</th><td>1</td></tr>
+  <tr><th>복구</th><td>옛 작업 기록 저장소 밖 작업 문서 <code>2026-11-20-mqtt-subscribe-log.md</code>의 검증 절(구현·검증)</td></tr>
+</table>
+
+<h2>판정</h2>
+<table>
+  <tr><th>ID</th><th>기준</th><th>결과</th><th>근거</th></tr>
+  <tr><td>R02-A10</td><td>구독 로그와 SUBACK</td><td class="pass">통과</td><td><code>Subscribe_LogsEachFilterWithQos_AndGrantsRequestedQos</code> 통과. 실장비 네 대의 구독 로그(QoS 0).</td></tr>
+  <tr><td>R02-A11</td><td>구독 해제 로그</td><td class="pass">통과</td><td><code>Unsubscribe_LogsEachFilter_AndStopsDelivery</code> 통과.</td></tr>
+  <tr><td>R02-A12</td><td>큐 넣음 로그</td><td class="pass">통과</td><td><code>DownlinkEnqueued_LogsSenderAndEachReceiver</code> 통과. 실장비 네 대마다 첫 <code>tisyn</code> 응답이 그 장비 ClientId 큐에 넣어짐.</td></tr>
+  <tr><td>R02-A13</td><td>구독자 없음 로그</td><td class="pass">통과</td><td><code>DownlinkWithoutSubscriber_LogsNotConsumedWarning</code> 통과. 변형 확인으로 <code>IsToDevice</code> 조건을 없애면 <code>NonDownlinkTopics_HaveNoDeliveryLogs</code> 실패.</td></tr>
+</table>
+
+<h2>자세히</h2>
+<details>
+  <summary><b>R02-A10</b> 구독 로그와 SUBACK</summary>
+  <p><code>Subscribe_LogsEachFilterWithQos_AndGrantsRequestedQos</code> 통과. 실장비 네 대의 구독 로그(QoS 0).</p>
+</details>
+<details>
+  <summary><b>R02-A11</b> 구독 해제 로그</summary>
+  <p><code>Unsubscribe_LogsEachFilter_AndStopsDelivery</code> 통과.</p>
+</details>
+<details>
+  <summary><b>R02-A12</b> 큐 넣음 로그</summary>
+  <p><code>DownlinkEnqueued_LogsSenderAndEachReceiver</code> 통과. 실장비 네 대마다 첫 <code>tisyn</code> 응답이 그 장비 ClientId 큐에 넣어짐.</p>
+</details>
+<details>
+  <summary><b>R02-A13</b> 구독자 없음 로그</summary>
+  <p><code>DownlinkWithoutSubscriber_LogsNotConsumedWarning</code> 통과. 변형 확인으로 <code>IsToDevice</code> 조건을 없애면 <code>NonDownlinkTopics_HaveNoDeliveryLogs</code> 실패.</p>
+</details>
+
+<h2>확인하지 못한 것</h2>
+<ul>
+  <li>없음</li>
+</ul>
+
+<h2>환경과 남긴 것</h2>
+<details>
+  <summary>확인한 환경, 끝난 뒤의 상태</summary>
+<ul>
+  <li><code>dotnet test --solution</code> 합계 461, 성공 460, 실패 0, 건너뜀 1</li>
+  <li>배포 설정의 <code>DawonRelay</code> 두 줄을 사용자 승인 뒤 지우고 배포(원본은 스크래치에 백업)</li>
+</ul>
+</details>
+
+<h2>앞 차수</h2>
+<ul>
+  <li>없음</li>
+</ul>
+
+</body>
+</html>

@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>V02_09 접속 인증 강제</title>
+<style>
+  body { font-family: "Malgun Gothic", sans-serif; max-width: 960px; margin: 32px auto; padding: 0 16px; color: #1f2933; line-height: 1.6; }
+  h1 { font-size: 22px; margin-bottom: 12px; }
+  h2 { font-size: 16px; margin-top: 32px; border-bottom: 1px solid #d9dee4; padding-bottom: 4px; }
+  table { border-collapse: collapse; width: 100%; font-size: 14px; }
+  th, td { border: 1px solid #d9dee4; padding: 6px 10px; text-align: left; vertical-align: top; }
+  th { background: #f3f5f7; white-space: nowrap; }
+  .pass { color: #0b7a3b; font-weight: 600; white-space: nowrap; }
+  .fail { color: #b42318; font-weight: 600; white-space: nowrap; }
+  .skip { color: #8a6100; font-weight: 600; white-space: nowrap; }
+  .summary { border: 1px solid #d9dee4; border-left: 6px solid #0b7a3b; background: #f7faf8; padding: 12px 16px; margin: 12px 0 20px; }
+  .summary.bad { border-left-color: #b42318; background: #fdf6f5; }
+  .summary.warn { border-left-color: #8a6100; background: #fdfaf2; }
+  .summary p { margin: 4px 0; }
+  .counts span { display: inline-block; margin-right: 16px; }
+  .meta { width: auto; font-size: 13px; color: #52606d; }
+  .meta th, .meta td { border: none; padding: 2px 12px 2px 0; background: none; }
+  details { border: 1px solid #d9dee4; border-radius: 4px; margin: 8px 0; padding: 0 12px; }
+  details[open] { padding-bottom: 8px; }
+  summary { cursor: pointer; padding: 8px 0; font-size: 14px; }
+  summary b { margin-right: 8px; }
+  details p, details li { font-size: 14px; }
+</style>
+</head>
+<body>
+
+<h1>V02_09 접속 인증 강제</h1>
+
+<div class="summary">
+  <p><strong>두 기준 모두 통과했고, 실장비 B540이 <code>Match</code>로 접속했다.</strong></p>
+  <p class="counts"><span class="pass">통과 2</span><span class="fail">미달 0</span><span class="skip">미확인 0</span></p>
+  <p>정해야 할 것: 없음</p>
+</div>
+
+<table class="meta">
+  <tr><th>태스크</th><td>T02_09</td></tr>
+  <tr><th>확인한 날짜</th><td>2026-11-21</td></tr>
+  <tr><th>확인한 커밋</th><td>기준점 <code>5e123b3</code> + 작업 트리(커밋 <code>00646f4</code>, #26)</td></tr>
+  <tr><th>차수</th><td>1</td></tr>
+  <tr><th>복구</th><td>옛 작업 기록 저장소 밖 작업 문서 <code>2026-11-21-mqtt-connect-auth.md</code>의 검증 절(구현 기록)</td></tr>
+</table>
+
+<h2>판정</h2>
+<table>
+  <tr><th>ID</th><th>기준</th><th>결과</th><th>근거</th></tr>
+  <tr><td>R02-A1</td><td>등록 키 접속과 기존 테스트</td><td class="pass">통과</td><td><code>dotnet test</code> 466 성공, 0 실패(1 Inconclusive).</td></tr>
+  <tr><td>R02-A9</td><td>거부 반환 코드와 판정 로그</td><td class="pass">통과</td><td>구현 전 인증 테스트 2개 실패, 구현 뒤 통과(원시 MQTT 3.1 CONNACK <code>0x04</code>·<code>0x03</code>·<code>0x00</code>). 실장비 B540 <code>passwordCheck="Match"</code>와 <code>tisyn</code> 응답.</td></tr>
+</table>
+
+<h2>자세히</h2>
+<details>
+  <summary><b>R02-A1</b> 등록 키 접속과 기존 테스트</summary>
+  <p><code>dotnet test</code> 466 성공, 0 실패(1 Inconclusive).</p>
+</details>
+<details>
+  <summary><b>R02-A9</b> 거부 반환 코드와 판정 로그</summary>
+  <p>구현 전 인증 테스트 2개 실패, 구현 뒤 통과(원시 MQTT 3.1 CONNACK <code>0x04</code>·<code>0x03</code>·<code>0x00</code>). 실장비 B540 <code>passwordCheck="Match"</code>와 <code>tisyn</code> 응답.</p>
+</details>
+
+<h2>확인하지 못한 것</h2>
+<ul>
+  <li>없음</li>
+</ul>
+
+<h2>환경과 남긴 것</h2>
+<details>
+  <summary>확인한 환경, 끝난 뒤의 상태</summary>
+<ul>
+  <li>미등록 M130-W 세 대는 판정 Unknown으로 거부되고 재접속을 되풀이(의도한 결과)</li>
+  <li>설정 파일·<code>AppConfiguration</code> 변경 없음(<code>git diff</code> 확인)</li>
+</ul>
+</details>
+
+<h2>앞 차수</h2>
+<ul>
+  <li>없음</li>
+</ul>
+
+</body>
+</html>
