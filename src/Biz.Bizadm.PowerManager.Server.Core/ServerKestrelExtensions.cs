@@ -102,21 +102,36 @@ namespace Biz.Bizadm.PowerManager.Server.Core
 
         /// <summary>
         /// cipher suite 정책을 만든다. Windows는 미지원이라 경고 후 null(OS 기본)을 반환하고, 유효한 이름이 없어도 null이다.
+        /// HTTPS와 MQTTS가 같은 규칙으로 목록을 해석한다. <paramref name="warnIfNoTls13"/>이 false면 HTTP/3 경고를 남기지 않는다(MQTTS).
         /// </summary>
-        internal static CipherSuitesPolicy? CreateCipherSuitesPolicy(string? includeCipherSuites, ILogger logger)
+        public static CipherSuitesPolicy? CreateCipherSuitesPolicy(string? includeCipherSuites, ILogger logger, bool warnIfNoTls13 = true)
+        {
+            IReadOnlyCollection<TlsCipherSuite>? suites = ResolveCipherSuites(includeCipherSuites, logger, warnIfNoTls13, OperatingSystem.IsWindows());
+            // 두 번째 확인은 플랫폼 분석기(CA1416)가 인정하는 보호 구문이다. CipherSuitesPolicy는 Windows에서 만들 수 없다.
+            if (suites is null || OperatingSystem.IsWindows())
+                return null;
+            return new CipherSuitesPolicy(suites);
+        }
+
+        /// <summary>
+        /// cipher suite 목록을 해석하고 경고를 남긴다. 제한하지 않으면(공백, Windows, 유효한 이름 없음) null이다.
+        /// OS 판단을 인자로 받아 Windows에서도 리눅스 경로를 테스트할 수 있다.
+        /// </summary>
+        internal static IReadOnlyCollection<TlsCipherSuite>? ResolveCipherSuites(string? includeCipherSuites, ILogger logger, bool warnIfNoTls13, bool isWindows)
         {
             if (string.IsNullOrWhiteSpace(includeCipherSuites))
                 return null;
 
-            if (OperatingSystem.IsWindows())
+            if (isWindows)
             {
                 logger.LogWarning("IncludeCipherSuites is not supported on Windows and is ignored; OS default cipher suites are used.");
                 return null;
             }
 
             IReadOnlyCollection<TlsCipherSuite> suites = ParseCipherSuites(includeCipherSuites, logger);
-            WarnIfNoTls13CipherSuite(suites, logger);
-            return suites.Count > 0 ? new CipherSuitesPolicy(suites) : null;
+            if (warnIfNoTls13)
+                WarnIfNoTls13CipherSuite(suites, logger);
+            return suites.Count > 0 ? suites : null;
         }
 
         private static readonly HashSet<TlsCipherSuite> Tls13CipherSuites =

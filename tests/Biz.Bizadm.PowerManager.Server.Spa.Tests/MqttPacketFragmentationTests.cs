@@ -1,6 +1,7 @@
 using Biz.Bizadm.PowerManager.Server.Core;
 using Biz.Bizadm.PowerManager.Server.Spa.Mqtt;
 using Microsoft.AspNetCore.Builder;
+using Microsoft.Extensions.Logging.Abstractions;
 using MQTTnet;
 using MQTTnet.Formatter;
 using MQTTnet.Protocol;
@@ -57,7 +58,7 @@ public sealed class MqttPacketFragmentationTests
 
         foreach (X509Certificate2? cert in new[] { null, certificate })
         {
-            MqttServerOptions options = MqttBrokerHostedService.BuildServerOptions(configuration, cert);
+            MqttServerOptions options = MqttBrokerHostedService.BuildServerOptions(configuration, cert, NullLogger.Instance);
             string label = cert is null ? "인증서 없음" : "인증서 있음";
             Assert.IsFalse(options.DefaultEndpointOptions.AllowPacketFragmentation, label + ": 비TLS 엔드포인트");
             Assert.IsFalse(options.TlsEndpointOptions.AllowPacketFragmentation, label + ": TLS 엔드포인트");

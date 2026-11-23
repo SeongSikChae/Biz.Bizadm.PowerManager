@@ -304,8 +304,9 @@ public sealed class MqttBrokerTests
         Assert.IsFalse(log.Contains(new string('a', 4097)), "4096바이트를 넘는 페이로드가 로그에 남았다.");
     }
 
+    // mqtts-tls-policy C1: MQTTS는 TLS 1.2와 1.3을 받는다. TLS 1.3도 등록 장치로 접속해야 접속 인증(R9)을 지난다.
     [TestMethod]
-    public async Task Mqtts_Tls12_PublishRegister_CallsRegister_AndTls13OnlyFails()
+    public async Task Mqtts_Tls12_PublishRegister_CallsRegister_AndTls13Connects()
     {
         string thumbprint = TestApp.WritePfx(Path.Combine(tempRoot, "server.pfx"), PfxPassword);
         AppConfiguration configuration = TestApp.Configuration(tempRoot);
@@ -327,11 +328,13 @@ public sealed class MqttBrokerTests
             await client.DisconnectAsync();
 
             using IMqttClient tls13Client = new MqttClientFactory().CreateMqttClient();
-            await Assert.ThrowsAsync<Exception>(() => tls13Client.ConnectAsync(ClientOptions(port).WithTlsOptions(tls => tls
+            MqttClientConnectResult tls13Result = await tls13Client.ConnectAsync(ClientOptions(port, device).WithTlsOptions(tls => tls
                 .UseTls()
                 .WithSslProtocols(SslProtocols.Tls13)
                 .WithTargetHost("localhost")
-                .WithCertificateValidationHandler(_ => true)).WithTimeout(TimeSpan.FromSeconds(5)).Build()));
+                .WithCertificateValidationHandler(args => args.Certificate.GetCertHashString() == thumbprint)).WithTimeout(TimeSpan.FromSeconds(5)).Build());
+            Assert.AreEqual(MqttClientConnectResultCode.Success, tls13Result.ResultCode);
+            await tls13Client.DisconnectAsync();
 
             await app.StopAsync();
         }

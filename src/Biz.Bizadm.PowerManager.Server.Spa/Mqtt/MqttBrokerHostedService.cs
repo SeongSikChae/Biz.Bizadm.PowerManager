@@ -6,6 +6,7 @@ using MQTTnet.Protocol;
 using MQTTnet.Server;
 using System.Buffers;
 using System.Collections;
+using System.Net.Security;
 using System.Security.Authentication;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
@@ -43,11 +44,12 @@ namespace Biz.Bizadm.PowerManager.Server.Spa.Mqtt
         private IDictionary? serverSessionItems;
 
         /// <summary>
-        /// 브로커 서버 옵션을 만든다. 비TLS 엔드포인트를 늘 열고, <paramref name="certificate"/>가 있으면 TLS 1.2 엔드포인트도 연다.
+        /// 브로커 서버 옵션을 만든다. 비TLS 엔드포인트를 늘 열고, <paramref name="certificate"/>가 있으면 TLS 1.2·1.3 엔드포인트도 연다.
+        /// TLS 엔드포인트에는 HTTPS와 같은 규칙으로 <c>Tls.IncludeCipherSuites</c>를 적용한다(Windows는 경고 후 무시, HTTP/3 경고는 남기지 않음).
         /// 두 엔드포인트 모두 패킷 분할을 끈다. 분할을 허용하면 MQTTnet이 페이로드 있는 패킷을 머리와 페이로드로 나눠 두 번 쓰고
         /// (TLS에서는 레코드 두 개), 장비 MQTT 라이브러리는 여러 수신에 걸친 패킷을 합치지 않는 것으로 보여 서버 → 장치 메시지가 버려진다.
         /// </summary>
-        public static MqttServerOptions BuildServerOptions(AppConfiguration configuration, X509Certificate2? certificate)
+        public static MqttServerOptions BuildServerOptions(AppConfiguration configuration, X509Certificate2? certificate, ILogger logger)
         {
             MqttServerOptionsBuilder optionsBuilder = new MqttServerFactory().CreateServerOptionsBuilder()
                 .WithDefaultEndpoint()
@@ -58,11 +60,21 @@ namespace Biz.Bizadm.PowerManager.Server.Spa.Mqtt
                 optionsBuilder = optionsBuilder
                     .WithEncryptedEndpoint()
                     .WithEncryptedEndpointPort(configuration.MqttsPort!.Value)
-                    .WithEncryptionCertificate(certificate)          // 체인·cipher는 적용하지 않는다(Kestrel만)
-                    .WithEncryptionSslProtocol(SslProtocols.Tls12);  // 장치 mbedTLS는 TLS 1.0~1.2
+                    .WithEncryptionCertificate(certificate)                               // 체인은 적용하지 않는다(OS 저장소에 기댐)
+                    .WithEncryptionSslProtocol(SslProtocols.Tls12 | SslProtocols.Tls13);  // 장치 mbedTLS는 TLS 1.0~1.2
             }
 
-            return optionsBuilder.WithoutPacketFragmentation().Build();
+            MqttServerOptions options = optionsBuilder.WithoutPacketFragmentation().Build();
+
+            // 빌더에 cipher 정책을 넣는 메서드가 없어 만든 옵션에 직접 넣는다. 인증서가 없으면(TLS 끔) 해석하지 않아 경고도 없다.
+            if (certificate is not null)
+            {
+                CipherSuitesPolicy? policy = ServerKestrelExtensions.CreateCipherSuitesPolicy(configuration.Tls?.IncludeCipherSuites, logger, warnIfNoTls13: false);
+                if (policy is not null)
+                    options.TlsEndpointOptions.CipherSuitesPolicy = policy;
+            }
+
+            return options;
         }
 
         public async Task StartAsync(CancellationToken cancellationToken)
@@ -71,7 +83,7 @@ namespace Biz.Bizadm.PowerManager.Server.Spa.Mqtt
             if (c.Tls?.UseTls == true)
                 certificate = TlsCertificateLoader.Load(c.Tls, c.ContentRootPath);
 
-            server = new MqttServerFactory().CreateMqttServer(BuildServerOptions(c, certificate));
+            server = new MqttServerFactory().CreateMqttServer(BuildServerOptions(c, certificate, logger));
             serverSessionItems = server.ServerSessionItems;
             server.InterceptingPublishAsync += OnPublishAsync;
             server.ClientConnectedAsync += OnClientConnectedAsync;
