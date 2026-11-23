@@ -16,6 +16,29 @@ public sealed class AppConfigurationTests
     private static AppConfiguration Deserialize(string yaml)
         => new YamlDotNet.Serialization.Deserializer().Deserialize<AppConfiguration>(yaml);
 
+    /// <summary>서버가 Salt·보안값을 기록할 때와 같은 직렬화로 다시 써도 저장소 값이 남는다.</summary>
+    [TestMethod]
+    public void Serialize_WithCredentialStore_KeepsValue()
+    {
+        AppConfiguration configuration = Deserialize("ContentRootPath: .\n" + OsKmsYaml + "\n  CredentialStore: gpg\n");
+        ConfigurationValidator.Validate(configuration);
+        configuration.OsKms.Salt = "c2FsdA==";
+
+        AppConfiguration reloaded = Deserialize(new YamlDotNet.Serialization.Serializer().Serialize(configuration));
+
+        Assert.AreEqual("gpg", reloaded.OsKms.CredentialStore);
+        Assert.AreEqual("c2FsdA==", reloaded.OsKms.Salt);
+    }
+
+    [TestMethod]
+    public void Validate_InvalidCredentialStore_Throws()
+    {
+        AppConfiguration configuration = Deserialize("ContentRootPath: .\n" + OsKmsYaml + "\n  CredentialStore: plaintext\n");
+
+        ArgumentException ex = Assert.ThrowsExactly<ArgumentException>(() => ConfigurationValidator.Validate(configuration));
+        Assert.AreEqual("CredentialStore", ex.ParamName);
+    }
+
     [TestMethod]
     public void Validate_WithoutOsKms_ThrowsArgumentNull()
     {

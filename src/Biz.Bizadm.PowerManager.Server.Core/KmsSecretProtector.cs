@@ -12,6 +12,9 @@ namespace Biz.Bizadm.PowerManager.Server.Core
         /// </summary>
         public static void Protect(OsKmsConfiguration osKms, string contentRootPath, TlsConfiguration? tls, Action saveConfiguration)
         {
+            // 패키지가 저장소를 만들 때 환경 변수를 읽으므로 그 전에 설정 값을 옮긴다.
+            CredentialStoreEnvironment.Apply(osKms.CredentialStore);
+
             IOsKekCredentialStore credentialStore = OsKekCredentialProvider.CreateForCurrentOs(
                 osKms.CredentialService, osKms.CredentialAccount, OsKekCredentialDefaults.Namespace
             );

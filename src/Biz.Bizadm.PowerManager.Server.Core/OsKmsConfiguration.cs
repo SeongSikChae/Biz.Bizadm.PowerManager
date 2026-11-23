@@ -23,12 +23,23 @@ namespace Biz.Bizadm.PowerManager.Server.Core
         [Property(PropertyType.STRING, required: true)]
         public string SecretsDekFilePath { get; set; } = null!;
 
+        /// <summary>
+        /// KEK 패스워드를 둘 자격 증명 저장소(<c>gpg</c> 또는 <c>secretservice</c>). 비우면 지금처럼 KMS 패키지가 고른다
+        /// (환경 변수 <c>GCM_CREDENTIAL_STORE</c>, 없으면 OS별 기본값). 화면 없는 Linux에서는 <c>gpg</c>를 쓴다.
+        /// </summary>
+        [Property(PropertyType.STRING)]
+        public string? CredentialStore { get; set; }
+
         public void Validate()
         {
             if (!Uri.TryCreate(CredentialService, UriKind.Absolute, out _))
                 throw new ArgumentException(
                     $"CredentialService must be an absolute URI (e.g. https://myapp.local): '{CredentialService}'.",
                     nameof(CredentialService));
+            if (!string.IsNullOrWhiteSpace(CredentialStore) && !CredentialStoreEnvironment.AllowedStores.Contains(CredentialStore))
+                throw new ArgumentException(
+                    $"CredentialStore must be empty or one of: {string.Join(", ", CredentialStoreEnvironment.AllowedStores)}.",
+                    nameof(CredentialStore));
         }
     }
 }
